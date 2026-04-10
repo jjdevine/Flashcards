@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flashcard Revision</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Home Screen -->
+    <div id="home-screen" class="screen active">
+      <header class="app-header">
+        <h1>Flashcard Revision</h1>
+        <p class="subtitle">Spaced repetition flashcard practice</p>
+      </header>
+      <div id="deck-grid" class="deck-grid"></div>
+      <footer class="app-footer">
+        <button id="reset-progress-btn" class="btn-text">Reset all progress</button>
+      </footer>
+    </div>
+
+    <!-- Deck Screen -->
+    <div id="deck-screen" class="screen">
+      <header class="deck-header">
+        <button id="back-home-btn" class="btn-back" aria-label="Back to home">&larr;</button>
+        <div class="deck-header-text">
+          <h2 id="deck-title"></h2>
+          <p id="deck-progress-summary" class="subtitle"></p>
+        </div>
+      </header>
+      <div class="progress-bar-container">
+        <div id="progress-bar" class="progress-bar"></div>
+        <span id="progress-text" class="progress-text"></span>
+      </div>
+
+      <!-- Flashcard -->
+      <div class="card-area">
+        <div id="flashcard" class="card">
+          <div class="card-inner">
+            <div class="card-front">
+              <div class="card-content" id="card-front-text"></div>
+              <div class="card-hint">Tap to reveal answer</div>
+            </div>
+            <div class="card-back">
+              <div class="card-answer" id="card-back-text"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rating buttons (shown after reveal) -->
+        <div id="rating-buttons" class="rating-buttons hidden">
+          <p class="rating-prompt">How well did you know this?</p>
+          <div class="rating-row">
+            <button class="btn-rating hard" data-rating="hard">Hard<span class="rating-key">1</span></button>
+            <button class="btn-rating ok" data-rating="ok">OK<span class="rating-key">2</span></button>
+            <button class="btn-rating easy" data-rating="easy">Very Easy<span class="rating-key">3</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="deck-stats" id="deck-stats"></div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

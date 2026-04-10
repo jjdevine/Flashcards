@@ -1,0 +1,176 @@
+/* === Reset & Base === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface-hover: #242836;
+  --card-bg: #1e2230;
+  --card-front: #232839;
+  --border: #2d3348;
+  --text: #e4e6ed;
+  --text-muted: #8b90a5;
+  --accent: #6c8cff;
+  --accent-hover: #8aa4ff;
+  --green: #4caf7c;
+  --orange: #e0a050;
+  --red: #cf5c5c;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --max-width: 720px;
+  --transition: 0.2s ease;
+}
+
+html { font-size: 16px; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* === Screens === */
+.screen { display: none; padding: 1rem; max-width: var(--max-width); margin: 0 auto; }
+.screen.active { display: block; }
+
+/* === Home === */
+.app-header { text-align: center; padding: 2rem 0 1.5rem; }
+.app-header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; }
+.subtitle { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem; }
+
+.deck-grid { display: grid; gap: 0.75rem; }
+
+.deck-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.deck-card:hover { background: var(--surface-hover); border-color: var(--accent); }
+
+.deck-card-top { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+.deck-icon { font-size: 1.5rem; }
+.deck-card-title { font-weight: 600; font-size: 1.05rem; }
+.deck-card-meta {
+  display: flex; gap: 1rem; margin-top: 0.5rem;
+  font-size: 0.8rem; color: var(--text-muted);
+}
+.deck-progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 0.5rem; overflow: hidden; }
+.deck-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s ease; }
+
+.app-footer { text-align: center; padding: 2rem 0 1rem; }
+
+/* === Buttons === */
+.btn-text {
+  background: none; border: none; color: var(--text-muted); font-size: 0.85rem;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.btn-text:hover { color: var(--text); }
+
+.btn-back {
+  background: none; border: 1px solid var(--border); color: var(--text); font-size: 1.1rem;
+  width: 2.5rem; height: 2.5rem; border-radius: var(--radius-sm); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--transition);
+}
+.btn-back:hover { background: var(--surface-hover); }
+
+/* === Deck Header === */
+.deck-header { display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem 0; }
+.deck-header-text h2 { font-size: 1.3rem; font-weight: 700; }
+
+/* === Progress Bar === */
+.progress-bar-container {
+  position: relative; height: 6px; background: var(--border); border-radius: 3px;
+  margin: 0.75rem 0; overflow: visible;
+}
+.progress-bar { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s ease; }
+.progress-text {
+  position: absolute; right: 0; top: -1.3rem; font-size: 0.75rem; color: var(--text-muted);
+}
+
+/* === Card === */
+.card-area { padding: 0.5rem 0 1rem; }
+
+.card {
+  perspective: 1000px;
+  cursor: pointer;
+  min-height: 220px;
+  margin-bottom: 1rem;
+}
+.card-inner {
+  position: relative; width: 100%; min-height: 220px;
+  transition: transform 0.5s ease; transform-style: preserve-3d;
+}
+.card.flipped .card-inner { transform: rotateX(180deg); }
+
+.card-front, .card-back {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 2rem 1.5rem; backface-visibility: hidden; width: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.card-front { position: relative; min-height: 220px; }
+.card-back {
+  position: absolute; top: 0; left: 0; min-height: 220px;
+  transform: rotateX(180deg);
+}
+
+.card-content {
+  font-size: 1.2rem; line-height: 1.7; text-align: center;
+  word-break: break-word;
+}
+.card-hint {
+  color: var(--text-muted); font-size: 0.8rem; margin-top: 1rem; text-align: center;
+}
+.card-answer {
+  font-size: 1.15rem; line-height: 1.7; text-align: center;
+  word-break: break-word;
+}
+
+/* === Rating Buttons === */
+.rating-buttons { text-align: center; }
+.rating-buttons.hidden { display: none; }
+.rating-prompt { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
+.rating-row { display: flex; gap: 0.5rem; justify-content: center; }
+
+.btn-rating {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 0.6rem 1.2rem; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 0.9rem; font-weight: 500;
+  transition: all var(--transition);
+  display: flex; align-items: center; gap: 0.4rem;
+  flex: 1; justify-content: center;
+}
+.btn-rating:hover { transform: translateY(-1px); }
+.btn-rating.hard:hover { border-color: var(--red); color: var(--red); }
+.btn-rating.ok:hover { border-color: var(--orange); color: var(--orange); }
+.btn-rating.easy:hover { border-color: var(--green); color: var(--green); }
+.btn-rating.hard:active { background: var(--red); color: #fff; border-color: var(--red); }
+.btn-rating.ok:active { background: var(--orange); color: #fff; border-color: var(--orange); }
+.btn-rating.easy:active { background: var(--green); color: #fff; border-color: var(--green); }
+
+.rating-key {
+  font-size: 0.7rem; color: var(--text-muted); background: var(--bg);
+  padding: 0.1rem 0.35rem; border-radius: 3px; margin-left: 0.25rem;
+}
+
+/* === Deck Stats === */
+.deck-stats { margin-top: 0.5rem; }
+.stats-grid {
+  display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;
+}
+.stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.6rem 1rem;
+  text-align: center; flex: 1; min-width: 70px;
+}
+.stat-label { display: block; font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-value { display: block; font-size: 1.1rem; font-weight: 600; margin-top: 0.15rem; }
+
+/* === Hidden utility === */
+.hidden { display: none !important; }
