@@ -283,6 +283,7 @@
     $("#card-answer-section").classList.add("hidden");
     $("#card-hint").classList.remove("hidden");
     $("#rating-buttons").classList.add("hidden");
+    $("#mark-incorrect-area").classList.add("hidden");
 
     updateProgressBar();
     updateDeckStats();
@@ -294,6 +295,7 @@
     $("#card-answer-section").classList.remove("hidden");
     $("#card-hint").classList.add("hidden");
     $("#rating-buttons").classList.remove("hidden");
+    $("#mark-incorrect-area").classList.remove("hidden");
   }
 
   // ── Progress indicators ────────────────────────────────────────
