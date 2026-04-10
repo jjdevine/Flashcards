@@ -9,6 +9,7 @@
   let currentDeckId = null;
   let currentCard = null;  // card index
   let revealed = false;
+  let sessionCards = 0;    // cards viewed in the current deck session
 
   // ── DOM refs ───────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -230,6 +231,7 @@
     await loadDeck(id);
     const entry = manifest.decks.find((d) => d.id === id);
     $("#deck-title").textContent = entry.name;
+    sessionCards = 0;
 
     showNextCard();
     updateDeckStats();
@@ -243,6 +245,7 @@
 
     currentCard = idx;
     revealed = false;
+    sessionCards++;
 
     const card = decks[currentDeckId].cards[idx];
     $("#card-front-text").textContent = card.front;
@@ -290,6 +293,7 @@
     $("#deck-progress-summary").textContent = seen + " of " + total + " cards seen";
     $("#deck-stats").innerHTML =
       '<div class="stats-grid">' +
+        '<div class="stat"><span class="stat-label">This session</span><span class="stat-value">' + sessionCards + '</span></div>' +
         '<div class="stat"><span class="stat-label">New</span><span class="stat-value">' + boxes[0] + '</span></div>' +
         '<div class="stat"><span class="stat-label">Learning</span><span class="stat-value">' + (boxes[1] + boxes[2]) + '</span></div>' +
         '<div class="stat"><span class="stat-label">Known</span><span class="stat-value">' + (boxes[3] + boxes[4]) + '</span></div>' +
