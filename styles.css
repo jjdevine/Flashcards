@@ -63,8 +63,6 @@ body {
 .deck-progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 0.5rem; overflow: hidden; }
 .deck-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s ease; }
 
-.app-footer { text-align: center; padding: 2rem 0 1rem; }
-
 /* === Buttons === */
 .btn-text {
   background: none; border: none; color: var(--text-muted); font-size: 0.85rem;
@@ -178,3 +176,52 @@ body {
 
 /* === Hidden utility === */
 .hidden { display: none !important; }
+
+/* === Mark Incorrect Button === */
+.btn-incorrect {
+  background: none; border: 1px solid var(--border); color: var(--text-muted);
+  padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 0.8rem; margin-top: 0.75rem;
+  transition: all var(--transition);
+}
+.btn-incorrect:hover { border-color: var(--red); color: var(--red); }
+
+/* === Incorrect Cards Screen === */
+.incorrect-deck-heading {
+  font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem;
+  color: var(--text-muted);
+}
+.incorrect-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem; margin-bottom: 0.5rem;
+}
+.incorrect-item-text { flex: 1; min-width: 0; }
+.incorrect-front {
+  font-size: 0.95rem; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.incorrect-back {
+  font-size: 0.85rem; color: var(--text-muted); margin-top: 0.15rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.btn-restore {
+  background: none; border: 1px solid var(--border); color: var(--text-muted);
+  width: 2rem; height: 2rem; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 1rem; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all var(--transition);
+}
+.btn-restore:hover { border-color: var(--green); color: var(--green); }
+
+.incorrect-empty { text-align: center; color: var(--text-muted); padding: 3rem 0; }
+.incorrect-actions { text-align: center; padding: 1.5rem 0; display: flex; flex-direction: column; gap: 0.75rem; align-items: center; }
+.incorrect-actions.hidden { display: none; }
+
+.btn-primary {
+  background: var(--accent); border: none; color: #fff; padding: 0.6rem 1.5rem;
+  border-radius: var(--radius-sm); cursor: pointer; font-size: 0.95rem; font-weight: 500;
+  transition: background var(--transition);
+}
+.btn-primary:hover { background: var(--accent-hover); }
+
+.app-footer { text-align: center; padding: 2rem 0 1rem; display: flex; flex-direction: column; gap: 0.5rem; align-items: center; }

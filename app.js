@@ -3,9 +3,11 @@
 
   // ── State ──────────────────────────────────────────────────────
   const STORAGE_KEY = "flashcard_revision";
+  const INCORRECT_KEY = "flashcard_incorrect";
   let manifest = null;
-  let decks = {};          // id -> { cards: [{front, back, tags}] }
+  let decks = {};          // id -> { cards: [{front, back, tags, rawLine, deckId, cardIndex}] }
   let progress = {};       // "deckId:cardIndex" -> { box, lastSeen }
+  let incorrect = {};      // "deckId:cardIndex" -> { front, back, rawLine, deckFile }
   let currentDeckId = null;
   let currentCard = null;  // card index
   let revealed = false;
@@ -21,10 +23,18 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       progress = raw ? JSON.parse(raw) : {};
     } catch { progress = {}; }
+    try {
+      const raw = localStorage.getItem(INCORRECT_KEY);
+      incorrect = raw ? JSON.parse(raw) : {};
+    } catch { incorrect = {}; }
   }
 
   function saveProgress() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(progress)); } catch {}
+  }
+
+  function saveIncorrect() {
+    try { localStorage.setItem(INCORRECT_KEY, JSON.stringify(incorrect)); } catch {}
   }
 
   // ── CSV Parser ─────────────────────────────────────────────────
@@ -84,7 +94,7 @@
       back = back.replace(/^[_~]\s*/, "");
 
       if (front && back) {
-        cards.push({ front, back, tags });
+        cards.push({ front, back, tags, rawLine: line });
       }
     }
     return cards;
@@ -165,11 +175,13 @@
 
     const boxWeights = [4, 50, 5, 3, 2, 1]; // index = box
     const cardWeights = deck.cards.map((_, i) => {
+      if (incorrect[cardKey(deckId, i)]) return 0; // skip incorrect cards
       const p = applyDecay(deckId, i);
       return boxWeights[Math.min(p.box, 5)];
     });
 
     const total = cardWeights.reduce((a, b) => a + b, 0);
+    if (total === 0) return null; // all cards are incorrect
     let r = Math.random() * total;
 
     for (let i = 0; i < cardWeights.length; i++) {
@@ -177,6 +189,24 @@
       if (r <= 0) return i;
     }
     return cardWeights.length - 1;
+  }
+
+  // ── Mark incorrect ─────────────────────────────────────────────
+  function markIncorrect() {
+    if (currentDeckId === null || currentCard === null) return;
+    if (!confirm("Mark this card as incorrect? It will be hidden from this deck.")) return;
+
+    const card = decks[currentDeckId].cards[currentCard];
+    const entry = manifest.decks.find((d) => d.id === currentDeckId);
+    incorrect[cardKey(currentDeckId, currentCard)] = {
+      front: card.front,
+      back: card.back,
+      rawLine: card.rawLine,
+      deckFile: entry.file,
+      deckName: entry.name,
+    };
+    saveIncorrect();
+    showNextCard();
   }
 
   // ── Rating ─────────────────────────────────────────────────────
@@ -305,6 +335,89 @@
   function showScreen(name) {
     $("#home-screen").classList.toggle("active", name === "home");
     $("#deck-screen").classList.toggle("active", name === "deck");
+    $("#incorrect-screen").classList.toggle("active", name === "incorrect");
+  }
+
+  // ── Incorrect cards screen ─────────────────────────────────────
+  function renderIncorrectScreen() {
+    const keys = Object.keys(incorrect);
+    const list = $("#incorrect-list");
+    const empty = $("#incorrect-empty");
+    const actions = $("#incorrect-actions");
+    list.innerHTML = "";
+
+    if (keys.length === 0) {
+      empty.classList.remove("hidden");
+      actions.classList.add("hidden");
+      return;
+    }
+
+    empty.classList.add("hidden");
+    actions.classList.remove("hidden");
+
+    // Group by deck
+    const byDeck = {};
+    for (const key of keys) {
+      const entry = incorrect[key];
+      const name = entry.deckName || "Unknown";
+      if (!byDeck[name]) byDeck[name] = [];
+      byDeck[name].push({ key, ...entry });
+    }
+
+    for (const deckName of Object.keys(byDeck).sort()) {
+      const heading = document.createElement("h3");
+      heading.className = "incorrect-deck-heading";
+      heading.textContent = deckName;
+      list.appendChild(heading);
+
+      for (const card of byDeck[deckName]) {
+        const el = document.createElement("div");
+        el.className = "incorrect-item";
+        el.innerHTML =
+          '<div class="incorrect-item-text">' +
+            '<div class="incorrect-front">' + esc(card.front) + '</div>' +
+            '<div class="incorrect-back">' + esc(card.back) + '</div>' +
+          '</div>' +
+          '<button class="btn-restore" title="Restore card">&#x21A9;</button>';
+        el.querySelector(".btn-restore").addEventListener("click", () => {
+          delete incorrect[card.key];
+          saveIncorrect();
+          renderIncorrectScreen();
+        });
+        list.appendChild(el);
+      }
+    }
+  }
+
+  function downloadIncorrectLines() {
+    const keys = Object.keys(incorrect);
+    if (!keys.length) return;
+
+    // Group raw lines by file
+    const byFile = {};
+    for (const key of keys) {
+      const entry = incorrect[key];
+      const file = entry.deckFile || "unknown.csv";
+      if (!byFile[file]) byFile[file] = [];
+      byFile[file].push(entry.rawLine);
+    }
+
+    let output = "";
+    for (const file of Object.keys(byFile).sort()) {
+      output += "=== " + file + " ===\n";
+      for (const line of byFile[file]) {
+        output += line + "\n";
+      }
+      output += "\n";
+    }
+
+    const blob = new Blob([output], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "incorrect-cards.txt";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   // ── Helpers ────────────────────────────────────────────────────
@@ -333,6 +446,36 @@
       currentCard = null;
       renderHome();
       showScreen("home");
+    });
+
+    // Mark incorrect
+    $("#mark-incorrect-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      markIncorrect();
+    });
+
+    // View incorrect cards
+    $("#view-incorrect-btn").addEventListener("click", () => {
+      renderIncorrectScreen();
+      showScreen("incorrect");
+    });
+
+    // Back from incorrect screen
+    $("#back-home-btn-incorrect").addEventListener("click", () => {
+      renderHome();
+      showScreen("home");
+    });
+
+    // Download incorrect lines
+    $("#download-incorrect-btn").addEventListener("click", downloadIncorrectLines);
+
+    // Clear all incorrect marks
+    $("#clear-incorrect-btn").addEventListener("click", () => {
+      if (confirm("Restore all incorrect cards? They will appear in decks again.")) {
+        incorrect = {};
+        saveIncorrect();
+        renderIncorrectScreen();
+      }
     });
 
     // Reset progress
