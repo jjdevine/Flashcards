@@ -150,13 +150,19 @@
   }
 
   // ── SRS — weighted random card selection ───────────────────────
-  // Box 0 = unseen, Box 1–5 = learning → mastered
-  // Lower boxes get higher weight so hard / new cards appear more often
+  // Box 0 = unseen
+  // Box 1 = marked hard (highest priority — needs drilling)
+  // Box 2 = seen once ok / recovering from hard (still needs work)
+  // Box 3–4 = known, fading to background
+  // Box 5 = mastered (rarely shown)
+  //
+  // Hard cards are much more likely than unseen; priority only drops
+  // after several ok/easy ratings push the card up the boxes.
   function selectNextCard(deckId) {
     const deck = decks[deckId];
     if (!deck || !deck.cards.length) return null;
 
-    const boxWeights = [8, 5, 4, 3, 2, 1]; // index = box
+    const boxWeights = [4, 50, 5, 3, 2, 1]; // index = box
     const cardWeights = deck.cards.map((_, i) => {
       const p = applyDecay(deckId, i);
       return boxWeights[Math.min(p.box, 5)];
