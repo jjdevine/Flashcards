@@ -2,6 +2,11 @@
   "buildTime": 1775816674749,
   "decks": [
     {
+      "id": "AI",
+      "name": "AI",
+      "file": "SourceCsvs/AI Design Patterns.csv"
+    },
+    {
       "id": "french",
       "name": "French",
       "file": "SourceCsvs/French.csv"
@@ -10,6 +15,16 @@
       "id": "indonesian",
       "name": "Indonesian",
       "file": "SourceCsvs/Indonesian.csv"
+    },
+    {
+      "id": "indo-eng",
+      "name": "Indo Eng-Ind",
+      "file": "SourceCsvs/Indo Eng-Ind.csv"
+    },
+    {
+      "id": "indo-indo",
+      "name": "Indo Ind-Eng",
+      "file": "SourceCsvs/Indo Ind-Eng.csv"
     },
     {
       "id": "spanish",
