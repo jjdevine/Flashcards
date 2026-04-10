@@ -1,23 +1,20 @@
 {
-  "buildTime": 1775815719341,
+  "buildTime": 1775816674749,
   "decks": [
     {
       "id": "french",
       "name": "French",
-      "file": "SourceCsvs/French.csv",
-      "icon": "🇫🇷"
+      "file": "SourceCsvs/French.csv"
     },
     {
       "id": "indonesian",
       "name": "Indonesian",
-      "file": "SourceCsvs/Indonesian.csv",
-      "icon": "🇮🇩"
+      "file": "SourceCsvs/Indonesian.csv"
     },
     {
       "id": "spanish",
       "name": "Spanish",
-      "file": "SourceCsvs/Spanish.csv",
-      "icon": "🇪🇸"
+      "file": "SourceCsvs/Spanish.csv"
     }
   ]
 }

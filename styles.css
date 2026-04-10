@@ -98,26 +98,15 @@ body {
 .card-area { padding: 0.5rem 0 1rem; }
 
 .card {
-  perspective: 1000px;
   cursor: pointer;
-  min-height: 220px;
   margin-bottom: 1rem;
-}
-.card-inner {
-  position: relative; width: 100%; min-height: 220px;
-  transition: transform 0.5s ease; transform-style: preserve-3d;
-}
-.card.flipped .card-inner { transform: rotateX(180deg); }
-
-.card-front, .card-back {
   background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 2rem 1.5rem; backface-visibility: hidden; width: 100%;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 2rem 1.5rem;
 }
-.card-front { position: relative; min-height: 220px; }
-.card-back {
-  position: absolute; top: 0; left: 0; min-height: 220px;
-  transform: rotateX(180deg);
+
+.card-question {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 150px;
 }
 
 .card-content {
@@ -127,6 +116,21 @@ body {
 .card-hint {
   color: var(--text-muted); font-size: 0.8rem; margin-top: 1rem; text-align: center;
 }
+
+.card-divider {
+  height: 1px; background: var(--border); margin: 1.25rem 0;
+}
+
+.card-answer-section {
+  animation: fadeIn 0.3s ease;
+}
+.card-answer-section.hidden { display: none; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .card-answer {
   font-size: 1.15rem; line-height: 1.7; text-align: center;
   word-break: break-word;

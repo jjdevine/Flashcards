@@ -118,6 +118,37 @@
     saveProgress();
   }
 
+  // ── SRS — time decay ──────────────────────────────────────────
+  // Minimum time (ms) a card must stay in a box before it can decay down.
+  // Box 0 = unseen (never decays). Box 5 = mastered.
+  const DECAY_MS = [
+    Infinity,   // box 0 – unseen, never
+    1  * 24 * 60 * 60 * 1000,   // box 1 – 1 day
+    2  * 24 * 60 * 60 * 1000,   // box 2 – 2 days
+    5  * 24 * 60 * 60 * 1000,   // box 3 – 5 days
+    10 * 24 * 60 * 60 * 1000,   // box 4 – 10 days
+    21 * 24 * 60 * 60 * 1000,   // box 5 – 21 days
+  ];
+
+  function applyDecay(deckId, cardIndex) {
+    const p = getCardProgress(deckId, cardIndex);
+    if (p.box <= 0 || !p.lastSeen) return p;
+
+    const elapsed = Date.now() - p.lastSeen;
+    const threshold = DECAY_MS[Math.min(p.box, 5)];
+    if (elapsed < threshold) return p;
+
+    // How many full intervals have passed? Drop one box per interval.
+    const intervals = Math.floor(elapsed / threshold);
+    const newBox = Math.max(1, p.box - intervals);
+    if (newBox !== p.box) {
+      const updated = { box: newBox, lastSeen: p.lastSeen };
+      setCardProgress(deckId, cardIndex, updated);
+      return updated;
+    }
+    return p;
+  }
+
   // ── SRS — weighted random card selection ───────────────────────
   // Box 0 = unseen, Box 1–5 = learning → mastered
   // Lower boxes get higher weight so hard / new cards appear more often
@@ -127,7 +158,7 @@
 
     const boxWeights = [8, 5, 4, 3, 2, 1]; // index = box
     const cardWeights = deck.cards.map((_, i) => {
-      const p = getCardProgress(deckId, i);
+      const p = applyDecay(deckId, i);
       return boxWeights[Math.min(p.box, 5)];
     });
 
@@ -174,7 +205,6 @@
       el.className = "deck-card";
       el.innerHTML =
         '<div class="deck-card-top">' +
-          '<span class="deck-icon">' + esc(entry.icon || "\uD83D\uDCC7") + '</span>' +
           '<span class="deck-card-title">' + esc(entry.name) + '</span>' +
         '</div>' +
         '<div class="deck-card-meta">' +
@@ -209,10 +239,10 @@
     revealed = false;
 
     const card = decks[currentDeckId].cards[idx];
-    const flashcard = $("#flashcard");
-    flashcard.classList.remove("flipped");
     $("#card-front-text").textContent = card.front;
     $("#card-back-text").textContent = card.back;
+    $("#card-answer-section").classList.add("hidden");
+    $("#card-hint").classList.remove("hidden");
     $("#rating-buttons").classList.add("hidden");
 
     updateProgressBar();
@@ -222,7 +252,8 @@
   function revealCard() {
     if (revealed) return;
     revealed = true;
-    $("#flashcard").classList.add("flipped");
+    $("#card-answer-section").classList.remove("hidden");
+    $("#card-hint").classList.add("hidden");
     $("#rating-buttons").classList.remove("hidden");
   }
 
@@ -231,7 +262,7 @@
     const deck = decks[currentDeckId];
     if (!deck) return;
     const total = deck.cards.length;
-    const mastered = deck.cards.filter((_, i) => getCardProgress(currentDeckId, i).box >= 4).length;
+    const mastered = deck.cards.filter((_, i) => applyDecay(currentDeckId, i).box >= 4).length;
     const pct = total ? Math.round((mastered / total) * 100) : 0;
     $("#progress-bar").style.width = pct + "%";
     $("#progress-text").textContent = mastered + "/" + total + " mastered";
@@ -243,7 +274,7 @@
 
     const boxes = [0, 0, 0, 0, 0, 0];
     deck.cards.forEach((_, i) => {
-      const p = getCardProgress(currentDeckId, i);
+      const p = applyDecay(currentDeckId, i);
       boxes[Math.min(p.box, 5)]++;
     });
 
@@ -275,7 +306,7 @@
 
   // ── Event binding ──────────────────────────────────────────────
   function bindEvents() {
-    // Flip card
+    // Reveal answer
     $("#flashcard").addEventListener("click", revealCard);
 
     // Rating buttons
