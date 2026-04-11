@@ -12,6 +12,7 @@
   let currentCard = null;  // card index
   let revealed = false;
   let sessionCards = 0;    // cards viewed in the current deck session
+  let sessionEasySet = new Set(); // card indices rated "very easy" this session
 
   // ── DOM refs ───────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -176,11 +177,24 @@
     const boxWeights = [4, 50, 5, 3, 2, 1]; // index = box
     const cardWeights = deck.cards.map((_, i) => {
       if (incorrect[cardKey(deckId, i)]) return 0; // skip incorrect cards
+      if (sessionEasySet.has(i)) return 0; // skip "very easy" cards this session
       const p = applyDecay(deckId, i);
       return boxWeights[Math.min(p.box, 5)];
     });
 
-    const total = cardWeights.reduce((a, b) => a + b, 0);
+    let total = cardWeights.reduce((a, b) => a + b, 0);
+
+    // If only "very easy" cards remain, allow them back in
+    if (total === 0 && sessionEasySet.size > 0) {
+      sessionEasySet.clear();
+      deck.cards.forEach((_, i) => {
+        if (incorrect[cardKey(deckId, i)]) { cardWeights[i] = 0; return; }
+        const p = applyDecay(deckId, i);
+        cardWeights[i] = boxWeights[Math.min(p.box, 5)];
+      });
+      total = cardWeights.reduce((a, b) => a + b, 0);
+    }
+
     if (total === 0) return null; // all cards are incorrect
     let r = Math.random() * total;
 
@@ -223,6 +237,7 @@
     }
 
     setCardProgress(currentDeckId, currentCard, { box: newBox, lastSeen: Date.now() });
+    if (rating === "easy") sessionEasySet.add(currentCard);
     showNextCard();
   }
 
@@ -262,6 +277,7 @@
     const entry = manifest.decks.find((d) => d.id === id);
     $("#deck-title").textContent = entry.name;
     sessionCards = 0;
+    sessionEasySet = new Set();
 
     showNextCard();
     updateDeckStats();
@@ -488,6 +504,23 @@
         decks = {};
         renderHome();
       }
+    });
+
+    // Reset current deck
+    $("#reset-deck-btn").addEventListener("click", () => {
+      if (!currentDeckId) return;
+      const entry = manifest.decks.find((d) => d.id === currentDeckId);
+      if (!confirm("Reset all progress for " + entry.name + "? This cannot be undone.")) return;
+      const deck = decks[currentDeckId];
+      deck.cards.forEach((_, i) => {
+        delete progress[cardKey(currentDeckId, i)];
+      });
+      saveProgress();
+      sessionCards = 0;
+      sessionEasySet = new Set();
+      showNextCard();
+      updateDeckStats();
+      updateProgressBar();
     });
 
     // Keyboard shortcuts
