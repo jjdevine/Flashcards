@@ -614,12 +614,18 @@
     showScreen("home");
     loadProgress();
 
-    if (currentUser) {
-      await pullState();
-    }
+    try {
+      if (currentUser) {
+        await pullState();
+      }
 
-    await loadManifest();
-    await Promise.all(manifest.decks.map((d) => loadDeck(d.id)));
+      await loadManifest();
+      await Promise.all(manifest.decks.map((d) => loadDeck(d.id)));
+    } catch (e) {
+      console.error("Error loading app data:", e);
+      appEntered = false;
+      return;
+    }
 
     showUserBar();
     bindEvents();
@@ -744,22 +750,24 @@
     if (supabase) {
       bindAuthEvents();
 
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
-          currentUser = session.user;
-          // Only auto-enter on initial load or sign-in
-          if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-            await enterApp();
-          }
-        }
-      });
-
-      // Check for existing session
+      // Check for existing session first (handles page refresh)
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         currentUser = session.user;
         await enterApp();
       }
+
+      // Listen for future auth changes (new sign-in from form, sign-out)
+      supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+          currentUser = session.user;
+          enterApp();
+        } else if (event === "SIGNED_OUT") {
+          currentUser = null;
+          appEntered = false;
+          showScreen("auth");
+        }
+      });
       // If no session, auth screen is already showing
     } else {
       // No Supabase configured — run in local-only mode
