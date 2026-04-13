@@ -232,26 +232,32 @@
   }
 
   function parseCSV(text) {
-    console.log(\"[DEBUG] parseCSV: Parsing CSV with\", text.length, \"bytes\");\n    const lines = text.split(/\\r?\\n/).filter((l) => l.trim());
-    console.log(\"[DEBUG] parseCSV: Found\", lines.length, \"non-empty lines\");\n    const cards = [];
+    console.log("[DEBUG] parseCSV: Parsing CSV with", text.length, "bytes");
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    console.log("[DEBUG] parseCSV: Found", lines.length, "non-empty lines");
+    const cards = [];
 
     for (const line of lines) {
       const fields = parseCSVLine(line);
-      if (fields.length < 2) {\n        console.log(\"[DEBUG] parseCSV: Skipping line with\", fields.length, \"field(s):\", line.substring(0, 50));\n        continue;\n      }
+      if (fields.length < 2) {
+        console.log("[DEBUG] parseCSV: Skipping line with", fields.length, "field(s):", line.substring(0, 50));
+        continue;
+      }
 
       let front = fields[0].trim();
       let back = fields[1].trim();
-      const tags = fields[2] ? fields[2].trim() : \"\";
+      const tags = fields[2] ? fields[2].trim() : "";
 
       // Strip Anki-style prefixes (_ or ~)
-      front = front.replace(/^[_~]\\s*/, \"\");
-      back = back.replace(/^[_~]\\s*/, \"\");
+      front = front.replace(/^[_~]\s*/, "");
+      back = back.replace(/^[_~]\s*/, "");
 
       if (front && back) {
         cards.push({ front, back, tags, rawLine: line });
       }
     }
-    console.log(\"[DEBUG] parseCSV: Successfully parsed\", cards.length, \"cards\");\n    return cards;
+    console.log("[DEBUG] parseCSV: Successfully parsed", cards.length, "cards");
+    return cards;
   }
 
   // ── Data loading ───────────────────────────────────────────────
