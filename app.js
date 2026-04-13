@@ -7,6 +7,7 @@
     : null;
   let currentUser = null;   // Supabase user object when signed in
   let syncInFlight = false; // Guard against overlapping syncs
+  let appEntered = false;   // Guard against duplicate enterApp() calls
 
   // ── State ──────────────────────────────────────────────────────
   const STORAGE_KEY = "flashcard_revision";
@@ -608,6 +609,8 @@
   }
 
   async function enterApp() {
+    if (appEntered) return;
+    appEntered = true;
     showScreen("home");
     loadProgress();
 
@@ -729,6 +732,7 @@
     $("#logout-btn").addEventListener("click", async () => {
       if (supabase) await supabase.auth.signOut();
       currentUser = null;
+      appEntered = false;
       showUserBar();
       showScreen("auth");
     });
