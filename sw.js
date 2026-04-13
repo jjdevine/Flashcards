@@ -1,0 +1,57 @@
+'use strict';
+
+importScripts('./sw-version.js');
+
+const CACHE_NAME = 'flashcards-' + CACHE_VERSION;
+const CDN_SCRIPT = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+
+// ── Install: pre-cache all app files ──────────────────────────
+self.addEventListener('install', (event) => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    // Cache local app files (must all succeed)
+    await cache.addAll(CACHE_FILES);
+    // Cache CDN script best-effort (may fail if offline at install time)
+    try { await cache.add(CDN_SCRIPT); } catch {}
+    await self.skipWaiting();
+  })());
+});
+
+// ── Activate: delete old caches ────────────────────────────────
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+    );
+    await self.clients.claim();
+  })());
+});
+
+// ── Fetch: cache-first, fall back to network ───────────────────
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
+  event.respondWith((async () => {
+    // Return cached copy if available
+    const cached = await caches.match(event.request);
+    if (cached) return cached;
+
+    // Otherwise fetch from network and add to cache
+    try {
+      const resp = await fetch(event.request);
+      if (resp.ok) {
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(event.request, resp.clone());
+      }
+      return resp;
+    } catch {
+      // Network failed — for page navigations return the cached shell
+      if (event.request.mode === 'navigate') {
+        const shell = await caches.match('./index.html');
+        if (shell) return shell;
+      }
+      return new Response('Offline — resource not cached.', { status: 503 });
+    }
+  })());
+});
