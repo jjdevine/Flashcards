@@ -28,16 +28,12 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-// ── Fetch: cache-first, fall back to network ───────────────────
+// ── Fetch: network-first, fall back to cache ───────────────────
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith((async () => {
-    // Return cached copy if available
-    const cached = await caches.match(event.request);
-    if (cached) return cached;
-
-    // Otherwise fetch from network and add to cache
+    // Try network first
     try {
       const resp = await fetch(event.request);
       if (resp.ok) {
@@ -46,7 +42,11 @@ self.addEventListener('fetch', (event) => {
       }
       return resp;
     } catch {
-      // Network failed — for page navigations return the cached shell
+      // Network failed — fall back to cache
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
+
+      // For page navigations return the cached shell as last resort
       if (event.request.mode === 'navigate') {
         const shell = await caches.match('./index.html');
         if (shell) return shell;

@@ -121,6 +121,11 @@
           console.warn('Service worker registration failed:', err);
         });
       });
+      // When a new service worker takes control (after skipWaiting), reload to
+      // pick up the freshly cached files instead of serving the old cached version.
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
     }
   </script>
 </body>
