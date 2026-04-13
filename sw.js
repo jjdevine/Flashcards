@@ -33,16 +33,20 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith((async () => {
-    // Try network first
+    // Try network first, with a 10-second timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
-      const resp = await fetch(event.request);
+      const resp = await fetch(event.request, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (resp.ok) {
         const cache = await caches.open(CACHE_NAME);
         cache.put(event.request, resp.clone());
       }
       return resp;
     } catch {
-      // Network failed — fall back to cache
+      clearTimeout(timeoutId);
+      // Network failed or timed out — fall back to cache
       const cached = await caches.match(event.request);
       if (cached) return cached;
 
