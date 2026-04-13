@@ -8,11 +8,37 @@
 </head>
 <body>
   <div id="app">
+    <!-- Auth Screen -->
+    <div id="auth-screen" class="screen active">
+      <header class="app-header">
+        <h1>Flashcard Revision</h1>
+        <p class="subtitle">Sign in to sync progress across devices</p>
+      </header>
+      <div class="auth-container">
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login">Sign In</button>
+          <button class="auth-tab" data-tab="signup">Sign Up</button>
+        </div>
+        <form id="auth-form" class="auth-form">
+          <input type="email" id="auth-email" placeholder="Email" required autocomplete="email">
+          <input type="password" id="auth-password" placeholder="Password" required autocomplete="current-password" minlength="6">
+          <button type="submit" id="auth-submit-btn" class="btn-primary auth-submit">Sign In</button>
+          <p id="auth-error" class="auth-error hidden"></p>
+        </form>
+        <button id="skip-auth-btn" class="btn-text auth-skip">Continue without signing in</button>
+      </div>
+    </div>
+
     <!-- Home Screen -->
-    <div id="home-screen" class="screen active">
+    <div id="home-screen" class="screen">
       <header class="app-header">
         <h1>Flashcard Revision</h1>
         <p class="subtitle">Spaced repetition flashcard practice</p>
+        <div id="user-bar" class="user-bar hidden">
+          <span id="user-email" class="user-email"></span>
+          <button id="sync-now-btn" class="btn-sync" title="Sync now">&#x21BB;</button>
+          <button id="logout-btn" class="btn-text">Sign out</button>
+        </div>
       </header>
       <div id="deck-grid" class="deck-grid"></div>
       <footer class="app-footer">
@@ -85,6 +111,8 @@
       </div>
     </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

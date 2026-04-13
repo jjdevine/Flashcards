@@ -1,6 +1,13 @@
 (function () {
   "use strict";
 
+  // ── Supabase client ────────────────────────────────────────────
+  const supabase = (typeof SUPABASE_URL !== "undefined" && SUPABASE_URL !== "https://YOUR_PROJECT_REF.supabase.co")
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
+  let currentUser = null;   // Supabase user object when signed in
+  let syncInFlight = false; // Guard against overlapping syncs
+
   // ── State ──────────────────────────────────────────────────────
   const STORAGE_KEY = "flashcard_revision";
   const INCORRECT_KEY = "flashcard_incorrect";
@@ -30,12 +37,98 @@
     } catch { incorrect = {}; }
   }
 
-  function saveProgress() {
+  function saveProgressLocal() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(progress)); } catch {}
   }
 
-  function saveIncorrect() {
+  function saveIncorrectLocal() {
     try { localStorage.setItem(INCORRECT_KEY, JSON.stringify(incorrect)); } catch {}
+  }
+
+  function saveProgress() {
+    saveProgressLocal();
+    debouncedSync();
+  }
+
+  function saveIncorrect() {
+    saveIncorrectLocal();
+    debouncedSync();
+  }
+
+  // ── Supabase sync ─────────────────────────────────────────────
+  let syncTimer = null;
+  function debouncedSync() {
+    if (!currentUser) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => pushState(), 1500);
+  }
+
+  async function pushState() {
+    if (!supabase || !currentUser || syncInFlight) return;
+    syncInFlight = true;
+    try {
+      const { error } = await supabase.from("user_state").upsert({
+        user_id: currentUser.id,
+        progress_data: progress,
+        incorrect_data: incorrect,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) console.error("Sync push error:", error.message);
+    } catch (e) {
+      console.error("Sync push exception:", e);
+    } finally {
+      syncInFlight = false;
+    }
+  }
+
+  async function pullState() {
+    if (!supabase || !currentUser) return;
+    try {
+      const { data, error } = await supabase
+        .from("user_state")
+        .select("progress_data, incorrect_data")
+        .eq("user_id", currentUser.id)
+        .maybeSingle();
+
+      if (error) { console.error("Sync pull error:", error.message); return; }
+      if (!data) return; // No remote state yet
+
+      mergeProgress(data.progress_data || {});
+      mergeIncorrect(data.incorrect_data || {});
+      saveProgressLocal();
+      saveIncorrectLocal();
+    } catch (e) {
+      console.error("Sync pull exception:", e);
+    }
+  }
+
+  function mergeProgress(remote) {
+    // For each card key, keep whichever entry has the later lastSeen
+    for (const key of Object.keys(remote)) {
+      const local = progress[key];
+      const rem = remote[key];
+      if (!local) {
+        progress[key] = rem;
+      } else if ((rem.lastSeen || 0) > (local.lastSeen || 0)) {
+        progress[key] = rem;
+      }
+    }
+  }
+
+  function mergeIncorrect(remote) {
+    // Union: keep all entries from both sides
+    for (const key of Object.keys(remote)) {
+      if (!incorrect[key]) {
+        incorrect[key] = remote[key];
+      }
+    }
+  }
+
+  async function syncNow() {
+    if (!currentUser) return;
+    await pullState();
+    await pushState();
+    renderHome();
   }
 
   // ── CSV Parser ─────────────────────────────────────────────────
@@ -351,6 +444,7 @@
 
   // ── Screen switching ───────────────────────────────────────────
   function showScreen(name) {
+    $("#auth-screen").classList.toggle("active", name === "auth");
     $("#home-screen").classList.toggle("active", name === "home");
     $("#deck-screen").classList.toggle("active", name === "deck");
     $("#incorrect-screen").classList.toggle("active", name === "incorrect");
@@ -443,6 +537,90 @@
     const el = document.createElement("span");
     el.textContent = str;
     return el.innerHTML;
+  }
+
+  // ── Auth UI ─────────────────────────────────────────────────────
+  function bindAuthEvents() {
+    // Tab switching
+    $$(".auth-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        $$(".auth-tab").forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        const isSignup = tab.dataset.tab === "signup";
+        $("#auth-submit-btn").textContent = isSignup ? "Sign Up" : "Sign In";
+        $("#auth-password").setAttribute("autocomplete", isSignup ? "new-password" : "current-password");
+        $("#auth-error").classList.add("hidden");
+      });
+    });
+
+    // Form submit
+    $("#auth-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = $("#auth-email").value.trim();
+      const password = $("#auth-password").value;
+      const isSignup = $(".auth-tab.active").dataset.tab === "signup";
+      const errEl = $("#auth-error");
+      const btn = $("#auth-submit-btn");
+
+      errEl.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = isSignup ? "Signing up…" : "Signing in…";
+
+      try {
+        let result;
+        if (isSignup) {
+          result = await supabase.auth.signUp({ email, password });
+        } else {
+          result = await supabase.auth.signInWithPassword({ email, password });
+        }
+
+        if (result.error) {
+          errEl.textContent = result.error.message;
+          errEl.classList.remove("hidden");
+        } else if (isSignup && result.data?.user && !result.data.session) {
+          errEl.textContent = "Check your email for a confirmation link.";
+          errEl.classList.remove("hidden");
+          errEl.style.color = "var(--green)";
+        }
+        // If sign in succeeds, the onAuthStateChange listener handles the rest
+      } catch (err) {
+        errEl.textContent = "Network error. Please try again.";
+        errEl.classList.remove("hidden");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = isSignup ? "Sign Up" : "Sign In";
+      }
+    });
+
+    // Skip auth
+    $("#skip-auth-btn").addEventListener("click", () => {
+      enterApp();
+    });
+  }
+
+  function showUserBar() {
+    if (!currentUser) {
+      $("#user-bar").classList.add("hidden");
+      return;
+    }
+    $("#user-email").textContent = currentUser.email;
+    $("#user-bar").classList.remove("hidden");
+  }
+
+  async function enterApp() {
+    showScreen("home");
+    loadProgress();
+
+    if (currentUser) {
+      await pullState();
+    }
+
+    await loadManifest();
+    await Promise.all(manifest.decks.map((d) => loadDeck(d.id)));
+
+    showUserBar();
+    bindEvents();
+    renderHome();
   }
 
   // ── Event binding ──────────────────────────────────────────────
@@ -539,18 +717,50 @@
         else if (e.key === "3") rateCard("easy");
       }
     });
+
+    // Sync now button
+    $("#sync-now-btn").addEventListener("click", async () => {
+      $("#sync-now-btn").disabled = true;
+      await syncNow();
+      $("#sync-now-btn").disabled = false;
+    });
+
+    // Logout
+    $("#logout-btn").addEventListener("click", async () => {
+      if (supabase) await supabase.auth.signOut();
+      currentUser = null;
+      showUserBar();
+      showScreen("auth");
+    });
   }
 
   // ── Init ───────────────────────────────────────────────────────
   async function init() {
-    loadProgress();
-    await loadManifest();
+    // If Supabase is configured, set up auth listener and show auth screen
+    if (supabase) {
+      bindAuthEvents();
 
-    // Pre-load all decks so the home screen can show card counts
-    await Promise.all(manifest.decks.map((d) => loadDeck(d.id)));
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          currentUser = session.user;
+          // Only auto-enter on initial load or sign-in
+          if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+            await enterApp();
+          }
+        }
+      });
 
-    bindEvents();
-    renderHome();
+      // Check for existing session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        currentUser = session.user;
+        await enterApp();
+      }
+      // If no session, auth screen is already showing
+    } else {
+      // No Supabase configured — run in local-only mode
+      await enterApp();
+    }
   }
 
   init();
