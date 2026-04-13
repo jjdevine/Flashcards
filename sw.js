@@ -50,6 +50,11 @@ self.addEventListener('fetch', (event) => {
       const cached = await caches.match(event.request);
       if (cached) return cached;
 
+      // Versioned URLs like manifest.json?v=... should still resolve to the
+      // pre-cached file when offline.
+      const cachedIgnoringSearch = await caches.match(event.request, { ignoreSearch: true });
+      if (cachedIgnoringSearch) return cachedIgnoringSearch;
+
       // For page navigations return the cached shell as last resort
       if (event.request.mode === 'navigate') {
         const shell = await caches.match('./index.html');

@@ -42,13 +42,26 @@
   // Intercept console.log and console.error
   const originalLog = console.log;
   const originalError = console.error;
+  function formatDebugArg(arg) {
+    if (arg instanceof Error) {
+      return arg.stack || arg.message || String(arg);
+    }
+    if (typeof arg === "object" && arg !== null) {
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    }
+    return String(arg);
+  }
   console.log = function(...args) {
     originalLog.apply(console, args);
-    addDebugLog(args.map(a => typeof a === "object" ? JSON.stringify(a) : String(a)).join(" "), false);
+    addDebugLog(args.map(formatDebugArg).join(" "), false);
   };
   console.error = function(...args) {
     originalError.apply(console, args);
-    addDebugLog(args.map(a => typeof a === "object" ? JSON.stringify(a) : String(a)).join(" "), true);
+    addDebugLog(args.map(formatDebugArg).join(" "), true);
   };
 
   // ── Supabase client ────────────────────────────────────────────
