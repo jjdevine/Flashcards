@@ -1,6 +1,56 @@
 (function () {
   "use strict";
 
+  // ── Debug Panel ────────────────────────────────────────────────
+  const debugLogs = [];
+  const MAX_DEBUG_LOGS = 50;
+
+  function addDebugLog(message, isError) {
+    debugLogs.push({ message, isError, timestamp: new Date().toLocaleTimeString() });
+    if (debugLogs.length > MAX_DEBUG_LOGS) debugLogs.shift();
+
+    const logsEl = $("#debug-logs");
+    if (logsEl) {
+      const lineEl = document.createElement("div");
+      lineEl.className = "debug-log-line " + (isError ? "debug-log-error" : "debug-log-debug");
+      const time = debugLogs[debugLogs.length - 1].timestamp;
+      lineEl.textContent = "[" + time + "] " + message;
+      logsEl.appendChild(lineEl);
+      logsEl.scrollTop = logsEl.scrollHeight;
+    }
+  }
+
+  function showDebugPanel() {
+    const panel = $("#debug-panel");
+    if (panel) {
+      panel.classList.remove("hidden");
+      debugLogs.length = 0;
+      const logsEl = $("#debug-logs");
+      if (logsEl) logsEl.innerHTML = "";
+    }
+  }
+
+  function hideDebugPanel() {
+    const panel = $("#debug-panel");
+    if (panel) {
+      setTimeout(() => {
+        panel.classList.add("hidden");
+      }, 500);
+    }
+  }
+
+  // Intercept console.log and console.error
+  const originalLog = console.log;
+  const originalError = console.error;
+  console.log = function(...args) {
+    originalLog.apply(console, args);
+    addDebugLog(args.map(a => typeof a === "object" ? JSON.stringify(a) : String(a)).join(" "), false);
+  };
+  console.error = function(...args) {
+    originalError.apply(console, args);
+    addDebugLog(args.map(a => typeof a === "object" ? JSON.stringify(a) : String(a)).join(" "), true);
+  };
+
   // ── Supabase client ────────────────────────────────────────────
   const supabase = (typeof SUPABASE_URL !== "undefined" && SUPABASE_URL !== "https://YOUR_PROJECT_REF.supabase.co")
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -28,14 +78,23 @@
 
   // ── Persistence ────────────────────────────────────────────────
   function loadProgress() {
+    console.log("[DEBUG] loadProgress: Loading progress from localStorage...");
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       progress = raw ? JSON.parse(raw) : {};
-    } catch { progress = {}; }
+      console.log("[DEBUG] loadProgress: Loaded progress with", Object.keys(progress).length, "cards");
+    } catch (e) {
+      console.error("[ERROR] loadProgress: Failed to parse progress", e);
+      progress = {};
+    }
     try {
       const raw = localStorage.getItem(INCORRECT_KEY);
       incorrect = raw ? JSON.parse(raw) : {};
-    } catch { incorrect = {}; }
+      console.log("[DEBUG] loadProgress: Loaded incorrect cards:", Object.keys(incorrect).length);
+    } catch (e) {
+      console.error("[ERROR] loadProgress: Failed to parse incorrect", e);
+      incorrect = {};
+    }
   }
 
   function saveProgressLocal() {
@@ -173,41 +232,69 @@
   }
 
   function parseCSV(text) {
-    const lines = text.split(/\r?\n/).filter((l) => l.trim());
-    const cards = [];
+    console.log(\"[DEBUG] parseCSV: Parsing CSV with\", text.length, \"bytes\");\n    const lines = text.split(/\\r?\\n/).filter((l) => l.trim());
+    console.log(\"[DEBUG] parseCSV: Found\", lines.length, \"non-empty lines\");\n    const cards = [];
 
     for (const line of lines) {
       const fields = parseCSVLine(line);
-      if (fields.length < 2) continue;
+      if (fields.length < 2) {\n        console.log(\"[DEBUG] parseCSV: Skipping line with\", fields.length, \"field(s):\", line.substring(0, 50));\n        continue;\n      }
 
       let front = fields[0].trim();
       let back = fields[1].trim();
-      const tags = fields[2] ? fields[2].trim() : "";
+      const tags = fields[2] ? fields[2].trim() : \"\";
 
       // Strip Anki-style prefixes (_ or ~)
-      front = front.replace(/^[_~]\s*/, "");
-      back = back.replace(/^[_~]\s*/, "");
+      front = front.replace(/^[_~]\\s*/, \"\");
+      back = back.replace(/^[_~]\\s*/, \"\");
 
       if (front && back) {
         cards.push({ front, back, tags, rawLine: line });
       }
     }
-    return cards;
+    console.log(\"[DEBUG] parseCSV: Successfully parsed\", cards.length, \"cards\");\n    return cards;
   }
 
   // ── Data loading ───────────────────────────────────────────────
   async function loadManifest() {
-    const resp = await fetch("manifest.json?v=" + Date.now());
-    manifest = await resp.json();
+    console.log("[DEBUG] loadManifest: Fetching manifest.json...");
+    try {
+      const resp = await fetch("manifest.json?v=" + Date.now());
+      if (!resp.ok) {
+        throw new Error("HTTP " + resp.status + " " + resp.statusText);
+      }
+      manifest = await resp.json();
+      console.log("[DEBUG] loadManifest: Successfully loaded. Found", manifest.decks.length, "decks:", manifest.decks.map(d => d.name).join(", "));
+    } catch (e) {
+      console.error("[ERROR] loadManifest: Failed to load manifest", e);
+      throw e;
+    }
   }
 
   async function loadDeck(id) {
-    if (decks[id]) return decks[id];
+    console.log("[DEBUG] loadDeck: Loading deck", id);
+    if (decks[id]) {
+      console.log("[DEBUG] loadDeck: Deck" , id, "already loaded with", decks[id].cards.length, "cards");
+      return decks[id];
+    }
     const entry = manifest.decks.find((d) => d.id === id);
-    const resp = await fetch(entry.file + "?v=" + manifest.buildTime);
-    const text = await resp.text();
-    decks[id] = { cards: parseCSV(text) };
-    return decks[id];
+    if (!entry) {
+      throw new Error("Deck " + id + " not found in manifest");
+    }
+    console.log("[DEBUG] loadDeck: Fetching", entry.file, "(buildTime:", manifest.buildTime + ")");
+    try {
+      const resp = await fetch(entry.file + "?v=" + manifest.buildTime);
+      if (!resp.ok) {
+        throw new Error("HTTP " + resp.status + " " + resp.statusText);
+      }
+      const text = await resp.text();
+      console.log("[DEBUG] loadDeck: Received", text.length, "bytes from", entry.file);
+      decks[id] = { cards: parseCSV(text) };
+      console.log("[DEBUG] loadDeck: Parsed", decks[id].cards.length, "cards from", entry.name);
+      return decks[id];
+    } catch (e) {
+      console.error("[ERROR] loadDeck: Failed to load deck", id, "(", entry.name + ")", e);
+      throw e;
+    }
   }
 
   // ── Progress helpers ───────────────────────────────────────────
@@ -609,27 +696,48 @@
   }
 
   async function enterApp() {
-    if (appEntered) return;
+    console.log("[DEBUG] enterApp: Starting app initialization...");
+    if (appEntered) {
+      console.log("[DEBUG] enterApp: Already entered, skipping");
+      return;
+    }
     appEntered = true;
+    showDebugPanel();
+    console.log("[DEBUG] enterApp: Showing home screen");
     showScreen("home");
+    console.log("[DEBUG] enterApp: Loading local progress");
     loadProgress();
 
     try {
       if (currentUser) {
+        console.log("[DEBUG] enterApp: User logged in, pulling remote state...");
         await pullState();
+        console.log("[DEBUG] enterApp: Remote state synced");
+      } else {
+        console.log("[DEBUG] enterApp: Running in offline mode (no user)");
       }
 
+      console.log("[DEBUG] enterApp: Loading manifest...");
       await loadManifest();
+      console.log("[DEBUG] enterApp: Loading all decks in parallel...");
+      const startTime = performance.now();
       await Promise.all(manifest.decks.map((d) => loadDeck(d.id)));
+      const elapsed = (performance.now() - startTime).toFixed(2);
+      console.log("[DEBUG] enterApp: All", manifest.decks.length, "decks loaded in", elapsed + "ms");
     } catch (e) {
-      console.error("Error loading app data:", e);
+      console.error("[ERROR] enterApp: Failed to load app data:", e);
       appEntered = false;
       return;
     }
 
+    console.log("[DEBUG] enterApp: Showing user bar");
     showUserBar();
+    console.log("[DEBUG] enterApp: Binding events");
     bindEvents();
+    console.log("[DEBUG] enterApp: Rendering home with", Object.keys(decks).length, "decks loaded");
     renderHome();
+    hideDebugPanel();
+    console.log("[DEBUG] enterApp: App fully initialized");
   }
 
   // ── Event binding ──────────────────────────────────────────────

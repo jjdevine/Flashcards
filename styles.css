@@ -304,3 +304,30 @@ body {
 }
 .btn-sync:hover { color: var(--accent); border-color: var(--accent); }
 .btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* === Debug Panel === */
+.debug-panel {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.95); z-index: 9999;
+  display: flex; flex-direction: column;
+  animation: fadeIn 0.2s ease;
+}
+.debug-panel.hidden { display: none; }
+.debug-header {
+  padding: 1rem; border-bottom: 1px solid var(--border);
+  font-weight: 600; color: var(--accent);
+}
+.debug-logs {
+  flex: 1; overflow-y: auto; padding: 1rem; font-family: "Monaco", "Menlo", monospace;
+  font-size: 0.8rem; line-height: 1.5;
+}
+.debug-log-line {
+  margin-bottom: 0.5rem; word-break: break-word;
+}
+.debug-log-debug {
+  color: var(--text-muted);
+}
+.debug-log-error {
+  color: var(--red);
+}
+
