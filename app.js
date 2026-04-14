@@ -497,7 +497,7 @@
     $("#card-front-text").textContent = card.front;
     $("#card-back-text").textContent = card.back;
     $("#card-answer-section").classList.add("hidden");
-    $("#card-hint").classList.remove("hidden");
+    $("#reveal-btn").classList.remove("hidden");
     $("#rating-buttons").classList.add("hidden");
     $("#mark-incorrect-area").classList.add("hidden");
 
@@ -509,7 +509,7 @@
     if (revealed) return;
     revealed = true;
     $("#card-answer-section").classList.remove("hidden");
-    $("#card-hint").classList.add("hidden");
+    $("#reveal-btn").classList.add("hidden");
     $("#rating-buttons").classList.remove("hidden");
     $("#mark-incorrect-area").classList.remove("hidden");
   }
@@ -762,7 +762,7 @@
   // ── Event binding ──────────────────────────────────────────────
   function bindEvents() {
     // Reveal answer
-    $("#flashcard").addEventListener("click", revealCard);
+    $("#reveal-btn").addEventListener("click", revealCard);
 
     // Rating buttons
     $$(".btn-rating").forEach((btn) => {

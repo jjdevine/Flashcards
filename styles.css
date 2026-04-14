@@ -95,8 +95,22 @@ body {
 /* === Card === */
 .card-area { padding: 0.5rem 0 1rem; }
 
+/* Fixed action row above the card — reveal button and rating buttons share this slot */
+.card-action-row {
+  margin-bottom: 0.75rem;
+}
+
+.btn-reveal {
+  width: 100%; padding: 0.85rem 1rem;
+  background: var(--accent); border: none; color: #fff;
+  border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 1rem; font-weight: 600;
+  transition: background var(--transition);
+}
+.btn-reveal:hover { background: var(--accent-hover); }
+.btn-reveal.hidden { display: none; }
+
 .card {
-  cursor: pointer;
   margin-bottom: 1rem;
   background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 2rem 1.5rem;
@@ -137,7 +151,6 @@ body {
 /* === Rating Buttons === */
 .rating-buttons { text-align: center; }
 .rating-buttons.hidden { display: none; }
-.rating-prompt { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
 .rating-row { display: flex; gap: 0.5rem; justify-content: center; }
 
 .btn-rating {

@@ -69,24 +69,25 @@
 
       <!-- Flashcard -->
       <div class="card-area">
+        <!-- Fixed action row: always at the top of the card area -->
+        <div class="card-action-row">
+          <button id="reveal-btn" class="btn-reveal">Reveal Answer</button>
+          <div id="rating-buttons" class="rating-buttons hidden">
+            <div class="rating-row">
+              <button class="btn-rating hard" data-rating="hard">Hard<span class="rating-key">1</span></button>
+              <button class="btn-rating ok" data-rating="ok">OK<span class="rating-key">2</span></button>
+              <button class="btn-rating easy" data-rating="easy">Very Easy<span class="rating-key">3</span></button>
+            </div>
+          </div>
+        </div>
+
         <div id="flashcard" class="card">
           <div class="card-question">
             <div class="card-content" id="card-front-text"></div>
-            <div class="card-hint" id="card-hint">Tap to reveal answer</div>
           </div>
           <div class="card-answer-section hidden" id="card-answer-section">
             <div class="card-divider"></div>
             <div class="card-answer" id="card-back-text"></div>
-          </div>
-        </div>
-
-        <!-- Rating buttons (shown after reveal) -->
-        <div id="rating-buttons" class="rating-buttons hidden">
-          <p class="rating-prompt">How well did you know this?</p>
-          <div class="rating-row">
-            <button class="btn-rating hard" data-rating="hard">Hard<span class="rating-key">1</span></button>
-            <button class="btn-rating ok" data-rating="ok">OK<span class="rating-key">2</span></button>
-            <button class="btn-rating easy" data-rating="easy">Very Easy<span class="rating-key">3</span></button>
           </div>
         </div>
       </div>
