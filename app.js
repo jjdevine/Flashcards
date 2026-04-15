@@ -75,15 +75,22 @@
   // ── State ──────────────────────────────────────────────────────
   const STORAGE_KEY = "flashcard_revision";
   const INCORRECT_KEY = "flashcard_incorrect";
+  const HIGHLIGHTED_KEY = "flashcard_highlighted";
+  const DECK_MODE_NORMAL = "normal";
+  const DECK_MODE_HIGHLIGHTED = "highlighted";
   let manifest = null;
   let decks = {};          // id -> { cards: [{front, back, tags, rawLine, deckId, cardIndex}] }
   let progress = {};       // "deckId:cardIndex" -> { box, lastSeen }
   let incorrect = {};      // "deckId:cardIndex" -> { front, back, rawLine, deckFile }
+  let highlighted = {};    // "deckId:cardIndex" -> true
   let currentDeckId = null;
+  let currentDeckMode = DECK_MODE_NORMAL;
+  let currentDeckCardIndices = [];
   let currentCard = null;  // card index
   let revealed = false;
   let sessionCards = 0;    // cards viewed in the current deck session
   let sessionEasySet = new Set(); // card indices rated "very easy" this session
+  let canSyncHighlightedData = true;
 
   // ── DOM refs ───────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -108,6 +115,14 @@
       console.error("[ERROR] loadProgress: Failed to parse incorrect", e);
       incorrect = {};
     }
+    try {
+      const raw = localStorage.getItem(HIGHLIGHTED_KEY);
+      highlighted = raw ? JSON.parse(raw) : {};
+      console.log("[DEBUG] loadProgress: Loaded highlighted cards:", Object.keys(highlighted).length);
+    } catch (e) {
+      console.error("[ERROR] loadProgress: Failed to parse highlighted", e);
+      highlighted = {};
+    }
   }
 
   function saveProgressLocal() {
@@ -118,6 +133,10 @@
     try { localStorage.setItem(INCORRECT_KEY, JSON.stringify(incorrect)); } catch {}
   }
 
+  function saveHighlightedLocal() {
+    try { localStorage.setItem(HIGHLIGHTED_KEY, JSON.stringify(highlighted)); } catch {}
+  }
+
   function saveProgress() {
     saveProgressLocal();
     debouncedSync();
@@ -125,6 +144,11 @@
 
   function saveIncorrect() {
     saveIncorrectLocal();
+    debouncedSync();
+  }
+
+  function saveHighlighted() {
+    saveHighlightedLocal();
     debouncedSync();
   }
 
@@ -140,12 +164,29 @@
     if (!supabase || !currentUser || syncInFlight) return;
     syncInFlight = true;
     try {
-      const { error } = await supabase.from("user_state").upsert({
+      const row = {
         user_id: currentUser.id,
         progress_data: progress,
         incorrect_data: incorrect,
         updated_at: new Date().toISOString(),
-      });
+      };
+      if (canSyncHighlightedData) {
+        row.highlighted_data = highlighted;
+      }
+
+      let { error } = await supabase.from("user_state").upsert(row);
+
+      // Backward compatibility for older schemas without highlighted_data.
+      if (error && canSyncHighlightedData && /highlighted_data/i.test(error.message || "")) {
+        canSyncHighlightedData = false;
+        ({ error } = await supabase.from("user_state").upsert({
+          user_id: currentUser.id,
+          progress_data: progress,
+          incorrect_data: incorrect,
+          updated_at: new Date().toISOString(),
+        }));
+      }
+
       if (error) console.error("Sync push error:", error.message);
     } catch (e) {
       console.error("Sync push exception:", e);
@@ -159,7 +200,7 @@
     try {
       const { data, error } = await supabase
         .from("user_state")
-        .select("progress_data, incorrect_data")
+        .select("*")
         .eq("user_id", currentUser.id)
         .maybeSingle();
 
@@ -168,8 +209,12 @@
 
       mergeProgress(data.progress_data || {});
       mergeIncorrect(data.incorrect_data || {});
+      if (data.highlighted_data) {
+        mergeHighlighted(data.highlighted_data || {});
+      }
       saveProgressLocal();
       saveIncorrectLocal();
+      saveHighlightedLocal();
     } catch (e) {
       console.error("Sync pull exception:", e);
     }
@@ -194,6 +239,13 @@
       if (!incorrect[key]) {
         incorrect[key] = remote[key];
       }
+    }
+  }
+
+  function mergeHighlighted(remote) {
+    // Union semantics: if highlighted remotely or locally, keep it highlighted.
+    for (const key of Object.keys(remote)) {
+      if (remote[key]) highlighted[key] = true;
     }
   }
 
@@ -321,6 +373,21 @@
     return deckId + ":" + cardIndex;
   }
 
+  function isCardHighlighted(deckId, cardIndex) {
+    return !!highlighted[cardKey(deckId, cardIndex)];
+  }
+
+  function getDeckCardIndices(deckId, mode) {
+    const deck = decks[deckId];
+    if (!deck) return [];
+    const indices = [];
+    deck.cards.forEach((_, i) => {
+      if (mode === DECK_MODE_HIGHLIGHTED && !isCardHighlighted(deckId, i)) return;
+      indices.push(i);
+    });
+    return indices;
+  }
+
   function getCardProgress(deckId, cardIndex) {
     return progress[cardKey(deckId, cardIndex)] || { box: 0, lastSeen: 0 };
   }
@@ -370,12 +437,17 @@
   //
   // Hard cards are much more likely than unseen; priority only drops
   // after several ok/easy ratings push the card up the boxes.
-  function selectNextCard(deckId) {
+  function selectNextCard(deckId, cardIndices) {
     const deck = decks[deckId];
     if (!deck || !deck.cards.length) return null;
 
+    const pool = cardIndices && cardIndices.length
+      ? cardIndices.slice()
+      : deck.cards.map((_, i) => i);
+    if (!pool.length) return null;
+
     const boxWeights = [4, 50, 5, 3, 2, 1]; // index = box
-    const cardWeights = deck.cards.map((_, i) => {
+    const cardWeights = pool.map((i) => {
       if (incorrect[cardKey(deckId, i)]) return 0; // skip incorrect cards
       if (sessionEasySet.has(i)) return 0; // skip "very easy" cards this session
       const p = applyDecay(deckId, i);
@@ -387,10 +459,10 @@
     // If only "very easy" cards remain, allow them back in
     if (total === 0 && sessionEasySet.size > 0) {
       sessionEasySet.clear();
-      deck.cards.forEach((_, i) => {
-        if (incorrect[cardKey(deckId, i)]) { cardWeights[i] = 0; return; }
+      pool.forEach((i, poolIdx) => {
+        if (incorrect[cardKey(deckId, i)]) { cardWeights[poolIdx] = 0; return; }
         const p = applyDecay(deckId, i);
-        cardWeights[i] = boxWeights[Math.min(p.box, 5)];
+        cardWeights[poolIdx] = boxWeights[Math.min(p.box, 5)];
       });
       total = cardWeights.reduce((a, b) => a + b, 0);
     }
@@ -400,9 +472,9 @@
 
     for (let i = 0; i < cardWeights.length; i++) {
       r -= cardWeights[i];
-      if (r <= 0) return i;
+      if (r <= 0) return pool[i];
     }
-    return cardWeights.length - 1;
+    return pool[pool.length - 1];
   }
 
   // ── Mark incorrect ─────────────────────────────────────────────
@@ -441,6 +513,59 @@
     showNextCard();
   }
 
+  function toggleCurrentCardHighlight() {
+    if (currentDeckId === null || currentCard === null) return;
+    const key = cardKey(currentDeckId, currentCard);
+    if (highlighted[key]) {
+      delete highlighted[key];
+    } else {
+      highlighted[key] = true;
+    }
+    saveHighlighted();
+
+    if (currentDeckMode === DECK_MODE_HIGHLIGHTED && !highlighted[key]) {
+      showNextCard();
+      return;
+    }
+
+    updateHighlightToggleButton();
+  }
+
+  function clearHighlightedDeck() {
+    if (!currentDeckId) return;
+    const entry = manifest.decks.find((d) => d.id === currentDeckId);
+    if (!confirm("Empty highlighted deck for " + entry.name + "?")) return;
+
+    const deck = decks[currentDeckId];
+    if (!deck) return;
+
+    deck.cards.forEach((_, i) => {
+      delete highlighted[cardKey(currentDeckId, i)];
+    });
+    saveHighlighted();
+
+    if (currentDeckMode === DECK_MODE_HIGHLIGHTED) {
+      currentDeckId = null;
+      currentDeckMode = DECK_MODE_NORMAL;
+      currentDeckCardIndices = [];
+      currentCard = null;
+      renderHome();
+      showScreen("home");
+      return;
+    }
+
+    updateDeckStats();
+    updateHighlightToggleButton();
+  }
+
+  function updateHighlightToggleButton() {
+    const btn = $("#toggle-highlight-btn");
+    if (!btn || currentDeckId === null || currentCard === null) return;
+    const highlightedNow = isCardHighlighted(currentDeckId, currentCard);
+    btn.textContent = highlightedNow ? "Unhighlight card" : "Highlight card";
+    btn.classList.toggle("active", highlightedNow);
+  }
+
   // ── Render: Home screen ────────────────────────────────────────
   function renderHome() {
     const grid = $("#deck-grid");
@@ -452,6 +577,7 @@
       const seen  = deck ? deck.cards.filter((_, i) => getCardProgress(entry.id, i).box > 0).length : 0;
       const mastered = deck ? deck.cards.filter((_, i) => getCardProgress(entry.id, i).box >= 4).length : 0;
       const pct = total ? Math.round((mastered / total) * 100) : 0;
+      const highlightedCount = deck ? deck.cards.filter((_, i) => isCardHighlighted(entry.id, i)).length : 0;
 
       const el = document.createElement("div");
       el.className = "deck-card";
@@ -465,19 +591,39 @@
           '<span>' + mastered + ' mastered</span>' +
         '</div>' +
         '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:' + pct + '%"></div></div>';
-      el.addEventListener("click", () => openDeck(entry.id));
+      el.addEventListener("click", () => openDeck(entry.id, DECK_MODE_NORMAL));
       grid.appendChild(el);
+
+      if (highlightedCount > 0) {
+        const highlightedEl = document.createElement("div");
+        highlightedEl.className = "deck-card deck-card-highlighted";
+        highlightedEl.innerHTML =
+          '<div class="deck-card-top">' +
+            '<span class="deck-card-title">' + esc(entry.name + " (highlighted)") + '</span>' +
+          '</div>' +
+          '<div class="deck-card-meta">' +
+            '<span>' + highlightedCount + ' highlighted</span>' +
+            '<span>Only highlighted cards</span>' +
+          '</div>' +
+          '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:100%"></div></div>';
+        highlightedEl.addEventListener("click", () => openDeck(entry.id, DECK_MODE_HIGHLIGHTED));
+        grid.appendChild(highlightedEl);
+      }
     }
   }
 
   // ── Render: open a deck ────────────────────────────────────────
-  async function openDeck(id) {
+  async function openDeck(id, mode = DECK_MODE_NORMAL) {
     currentDeckId = id;
+    currentDeckMode = mode;
     await loadDeck(id);
     const entry = manifest.decks.find((d) => d.id === id);
-    $("#deck-title").textContent = entry.name;
+    $("#deck-title").textContent = mode === DECK_MODE_HIGHLIGHTED ? entry.name + " (highlighted)" : entry.name;
     sessionCards = 0;
     sessionEasySet = new Set();
+    currentDeckCardIndices = getDeckCardIndices(currentDeckId, currentDeckMode);
+
+    $("#clear-highlighted-btn").classList.toggle("hidden", mode !== DECK_MODE_HIGHLIGHTED);
 
     showNextCard();
     updateDeckStats();
@@ -486,8 +632,23 @@
 
   // ── Render: show next card ─────────────────────────────────────
   function showNextCard() {
-    const idx = selectNextCard(currentDeckId);
-    if (idx === null) return;
+    currentDeckCardIndices = getDeckCardIndices(currentDeckId, currentDeckMode);
+    const idx = selectNextCard(currentDeckId, currentDeckCardIndices);
+    if (idx === null) {
+      currentCard = null;
+      revealed = false;
+      $("#card-front-text").textContent = currentDeckMode === DECK_MODE_HIGHLIGHTED
+        ? "No highlighted cards available right now."
+        : "No cards available right now.";
+      $("#card-back-text").textContent = "";
+      $("#card-answer-section").classList.add("hidden");
+      $("#reveal-btn").classList.add("hidden");
+      $("#rating-buttons").classList.add("hidden");
+      $("#mark-incorrect-area").classList.add("hidden");
+      updateProgressBar();
+      updateDeckStats();
+      return;
+    }
 
     currentCard = idx;
     revealed = false;
@@ -500,6 +661,7 @@
     $("#reveal-btn").classList.remove("hidden");
     $("#rating-buttons").classList.add("hidden");
     $("#mark-incorrect-area").classList.add("hidden");
+    updateHighlightToggleButton();
 
     updateProgressBar();
     updateDeckStats();
@@ -512,14 +674,18 @@
     $("#reveal-btn").classList.add("hidden");
     $("#rating-buttons").classList.remove("hidden");
     $("#mark-incorrect-area").classList.remove("hidden");
+    updateHighlightToggleButton();
   }
 
   // ── Progress indicators ────────────────────────────────────────
   function updateProgressBar() {
     const deck = decks[currentDeckId];
     if (!deck) return;
-    const total = deck.cards.length;
-    const mastered = deck.cards.filter((_, i) => applyDecay(currentDeckId, i).box >= 4).length;
+    const indices = currentDeckCardIndices.length
+      ? currentDeckCardIndices
+      : getDeckCardIndices(currentDeckId, currentDeckMode);
+    const total = indices.length;
+    const mastered = indices.filter((i) => applyDecay(currentDeckId, i).box >= 4).length;
     const pct = total ? Math.round((mastered / total) * 100) : 0;
     $("#progress-bar").style.width = pct + "%";
     $("#progress-text").textContent = mastered + "/" + total + " mastered";
@@ -529,13 +695,17 @@
     const deck = decks[currentDeckId];
     if (!deck) return;
 
+    const indices = currentDeckCardIndices.length
+      ? currentDeckCardIndices
+      : getDeckCardIndices(currentDeckId, currentDeckMode);
+
     const boxes = [0, 0, 0, 0, 0, 0];
-    deck.cards.forEach((_, i) => {
+    indices.forEach((i) => {
       const p = applyDecay(currentDeckId, i);
       boxes[Math.min(p.box, 5)]++;
     });
 
-    const total = deck.cards.length;
+    const total = indices.length;
     const seen = total - boxes[0];
 
     $("#deck-progress-summary").textContent = seen + " of " + total + " cards seen";
@@ -775,6 +945,8 @@
     // Back to home
     $("#back-home-btn").addEventListener("click", () => {
       currentDeckId = null;
+      currentDeckMode = DECK_MODE_NORMAL;
+      currentDeckCardIndices = [];
       currentCard = null;
       renderHome();
       showScreen("home");
@@ -784,6 +956,17 @@
     $("#mark-incorrect-btn").addEventListener("click", (e) => {
       e.stopPropagation();
       markIncorrect();
+    });
+
+    // Toggle highlight on current card
+    $("#toggle-highlight-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleCurrentCardHighlight();
+    });
+
+    // Empty highlighted deck for current deck
+    $("#clear-highlighted-btn").addEventListener("click", () => {
+      clearHighlightedDeck();
     });
 
     // View incorrect cards
@@ -830,6 +1013,7 @@
         delete progress[cardKey(currentDeckId, i)];
       });
       saveProgress();
+      currentDeckCardIndices = getDeckCardIndices(currentDeckId, currentDeckMode);
       sessionCards = 0;
       sessionEasySet = new Set();
       showNextCard();

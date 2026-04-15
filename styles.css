@@ -53,6 +53,15 @@ body {
 }
 .deck-card:hover { background: var(--surface-hover); border-color: var(--accent); }
 
+.deck-card-highlighted {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border) 45%);
+  background: color-mix(in srgb, var(--surface) 70%, var(--accent) 30%);
+}
+
+.deck-card-highlighted .deck-progress-fill {
+  background: var(--green);
+}
+
 .deck-card-top { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
 .deck-icon { font-size: 1.5rem; }
 .deck-card-title { font-weight: 600; font-size: 1.05rem; }
@@ -191,8 +200,23 @@ body {
 .hidden { display: none !important; }
 
 /* === Mark Incorrect Button === */
-.mark-incorrect-area { text-align: center; margin-top: 1rem; }
+.mark-incorrect-area {
+  text-align: center;
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
 .mark-incorrect-area.hidden { display: none; }
+.btn-highlight {
+  background: transparent; border: 1px solid var(--accent); color: var(--accent);
+  padding: 0.5rem 1.2rem; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 0.85rem; font-weight: 500;
+  transition: all var(--transition);
+}
+.btn-highlight:hover,
+.btn-highlight.active { background: var(--accent); color: #fff; }
 .btn-incorrect {
   background: transparent; border: 1px solid var(--red); color: var(--red);
   padding: 0.5rem 1.2rem; border-radius: var(--radius-sm); cursor: pointer;
@@ -203,6 +227,14 @@ body {
 
 /* === Reset Deck Button === */
 .reset-deck-area { text-align: center; margin-top: 1.5rem; }
+.btn-clear-highlighted {
+  background: transparent; border: 1px solid var(--orange); color: var(--orange);
+  padding: 0.5rem 1.2rem; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 0.85rem; font-weight: 500;
+  transition: all var(--transition);
+  margin-bottom: 0.6rem;
+}
+.btn-clear-highlighted:hover { background: var(--orange); color: #fff; }
 .btn-reset-deck {
   background: transparent; border: 1px solid var(--border); color: var(--text-muted);
   padding: 0.5rem 1.2rem; border-radius: var(--radius-sm); cursor: pointer;
