@@ -533,18 +533,24 @@
 
   function clearHighlightedDeck() {
     if (!currentDeckId) return;
-    const entry = manifest.decks.find((d) => d.id === currentDeckId);
+    clearHighlightedDeckById(currentDeckId);
+  }
+
+  function clearHighlightedDeckById(deckId) {
+    if (!deckId) return;
+    const entry = manifest.decks.find((d) => d.id === deckId);
+    if (!entry) return;
     if (!confirm("Empty highlighted deck for " + entry.name + "?")) return;
 
-    const deck = decks[currentDeckId];
+    const deck = decks[deckId];
     if (!deck) return;
 
     deck.cards.forEach((_, i) => {
-      delete highlighted[cardKey(currentDeckId, i)];
+      delete highlighted[cardKey(deckId, i)];
     });
     saveHighlighted();
 
-    if (currentDeckMode === DECK_MODE_HIGHLIGHTED) {
+    if (currentDeckId === deckId && currentDeckMode === DECK_MODE_HIGHLIGHTED) {
       currentDeckId = null;
       currentDeckMode = DECK_MODE_NORMAL;
       currentDeckCardIndices = [];
@@ -554,8 +560,11 @@
       return;
     }
 
-    updateDeckStats();
-    updateHighlightToggleButton();
+    if (currentDeckId === deckId) {
+      updateDeckStats();
+      updateHighlightToggleButton();
+    }
+    renderHome();
   }
 
   function updateHighlightToggleButton() {
@@ -589,6 +598,7 @@
           '<span>' + total + ' cards</span>' +
           '<span>' + seen + ' seen</span>' +
           '<span>' + mastered + ' mastered</span>' +
+          '<span>' + highlightedCount + ' highlighted</span>' +
         '</div>' +
         '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:' + pct + '%"></div></div>';
       el.addEventListener("click", () => openDeck(entry.id, DECK_MODE_NORMAL));
@@ -605,7 +615,14 @@
             '<span>' + highlightedCount + ' highlighted</span>' +
             '<span>Only highlighted cards</span>' +
           '</div>' +
+          '<div class="deck-card-actions">' +
+            '<button class="btn-home-clear-highlighted">Empty highlighted</button>' +
+          '</div>' +
           '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:100%"></div></div>';
+        highlightedEl.querySelector(".btn-home-clear-highlighted").addEventListener("click", (e) => {
+          e.stopPropagation();
+          clearHighlightedDeckById(entry.id);
+        });
         highlightedEl.addEventListener("click", () => openDeck(entry.id, DECK_MODE_HIGHLIGHTED));
         grid.appendChild(highlightedEl);
       }
