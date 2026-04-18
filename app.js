@@ -608,8 +608,8 @@
     const sortedDecks = manifest.decks.slice().sort((a, b) => {
       const aPinned = !!pinnedDecks[a.id];
       const bPinned = !!pinnedDecks[b.id];
-      if (aPinned === bPinned) return 0;
-      return aPinned ? -1 : 1;
+      if (aPinned !== bPinned) return aPinned ? -1 : 1;
+      return manifest.decks.indexOf(a) - manifest.decks.indexOf(b);
     });
 
     for (const entry of sortedDecks) {
@@ -626,7 +626,7 @@
       el.innerHTML =
         '<div class="deck-card-top">' +
           '<span class="deck-card-title">' + esc(entry.name) + '</span>' +
-          '<button class="btn-pin' + (isPinned ? ' active" title="Unpin deck"' : '" title="Pin deck to top"') + '>&#x1F4CC;</button>' +
+          '<button class="btn-pin' + (isPinned ? ' active" aria-label="Unpin deck" title="Unpin deck"' : '" aria-label="Pin deck to top" title="Pin deck to top"') + '>&#x1F4CC;</button>' +
         '</div>' +
         '<div class="deck-card-meta">' +
           '<span>' + total + ' cards</span>' +
