@@ -1,2 +1,7 @@
 node_modules/
 _site/
+.idea/dbnavigator.xml
+.idea/Flashcards.iml
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
