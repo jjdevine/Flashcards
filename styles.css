@@ -375,6 +375,54 @@ body {
 .btn-sync:hover { color: var(--accent); border-color: var(--accent); }
 .btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* === View Controls === */
+.view-controls { display: flex; justify-content: flex-end; margin-bottom: 0.4rem; }
+
+.btn-view-toggle {
+  background: none; border: 1px solid var(--border); color: var(--text-muted);
+  font-size: 0.78rem; padding: 0.25rem 0.6rem; border-radius: var(--radius-sm);
+  cursor: pointer; transition: all var(--transition);
+}
+.btn-view-toggle:hover { color: var(--text); border-color: var(--accent); }
+.btn-view-toggle.condensed-active { border-color: var(--accent); color: var(--accent); }
+
+/* === Deck Start Button (condensed mode only) === */
+.btn-deck-start {
+  display: none;
+  background: var(--surface-hover); border: 1px solid var(--border); color: var(--text);
+  padding: 0.3rem 0.65rem; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 0.9rem; flex-shrink: 0; transition: all var(--transition);
+  align-items: center; justify-content: center;
+  pointer-events: none; /* card click handles navigation */
+}
+
+.btn-deck-clear-sm {
+  display: none;
+  background: transparent; border: 1px solid var(--border); color: var(--text-muted);
+  padding: 0.3rem 0.55rem; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 0.8rem; flex-shrink: 0; transition: all var(--transition);
+  align-items: center; justify-content: center;
+}
+.btn-deck-clear-sm:hover { border-color: var(--orange); color: var(--orange); }
+
+/* === Condensed Mode === */
+.deck-grid.condensed { gap: 0.3rem; }
+
+.deck-grid.condensed .deck-card {
+  display: flex; flex-direction: row; align-items: center;
+  padding: 0.45rem 0.75rem; gap: 0.5rem;
+}
+
+.deck-grid.condensed .deck-card-top { flex: 1; margin-bottom: 0; min-width: 0; }
+.deck-grid.condensed .deck-card-title { font-size: 0.95rem; }
+
+.deck-grid.condensed .deck-card-meta,
+.deck-grid.condensed .deck-progress-bar,
+.deck-grid.condensed .deck-card-actions { display: none; }
+
+.deck-grid.condensed .btn-deck-start { display: flex; }
+.deck-grid.condensed .btn-deck-clear-sm { display: flex; }
+
 /* === Debug Panel === */
 .debug-panel {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;

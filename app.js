@@ -76,6 +76,7 @@
   const STORAGE_KEY = "flashcard_revision";
   const INCORRECT_KEY = "flashcard_incorrect";
   const HIGHLIGHTED_KEY = "flashcard_highlighted";
+  const CONDENSED_KEY = "flashcard_condensed";
   const DECK_MODE_NORMAL = "normal";
   const DECK_MODE_HIGHLIGHTED = "highlighted";
   let manifest = null;
@@ -83,6 +84,7 @@
   let progress = {};       // "deckId:cardIndex" -> { box, lastSeen }
   let incorrect = {};      // "deckId:cardIndex" -> { front, back, rawLine, deckFile }
   let highlighted = {};    // "deckId:cardIndex" -> true
+  let condensedMode = false;
   let currentDeckId = null;
   let currentDeckMode = DECK_MODE_NORMAL;
   let currentDeckCardIndices = [];
@@ -575,6 +577,21 @@
     btn.classList.toggle("active", highlightedNow);
   }
 
+  // ── Condensed mode ─────────────────────────────────────────────
+  function applyCondensedMode() {
+    const grid = $("#deck-grid");
+    const btn = $("#condensed-toggle-btn");
+    if (condensedMode) {
+      grid.classList.add("condensed");
+      btn.textContent = "⊞ Normal";
+      btn.classList.add("condensed-active");
+    } else {
+      grid.classList.remove("condensed");
+      btn.textContent = "⊟ Condensed";
+      btn.classList.remove("condensed-active");
+    }
+  }
+
   // ── Render: Home screen ────────────────────────────────────────
   function renderHome() {
     const grid = $("#deck-grid");
@@ -600,7 +617,8 @@
           '<span>' + mastered + ' mastered</span>' +
           '<span>' + highlightedCount + ' highlighted</span>' +
         '</div>' +
-        '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:' + pct + '%"></div></div>';
+        '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:' + pct + '%"></div></div>' +
+        '<button class="btn-deck-start" aria-label="Start deck" tabindex="-1">&#9654;</button>';
       el.addEventListener("click", () => openDeck(entry.id, DECK_MODE_NORMAL));
       grid.appendChild(el);
 
@@ -618,8 +636,14 @@
           '<div class="deck-card-actions">' +
             '<button class="btn-home-clear-highlighted">Empty highlighted</button>' +
           '</div>' +
-          '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:100%"></div></div>';
+          '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:100%"></div></div>' +
+          '<button class="btn-deck-clear-sm" aria-label="Clear highlighted" title="Clear highlighted">&#10005;</button>' +
+          '<button class="btn-deck-start" aria-label="Start highlighted deck" tabindex="-1">&#9654;</button>';
         highlightedEl.querySelector(".btn-home-clear-highlighted").addEventListener("click", (e) => {
+          e.stopPropagation();
+          clearHighlightedDeckById(entry.id);
+        });
+        highlightedEl.querySelector(".btn-deck-clear-sm").addEventListener("click", (e) => {
           e.stopPropagation();
           clearHighlightedDeckById(entry.id);
         });
@@ -963,6 +987,8 @@
     showUserBar();
     console.log("[DEBUG] enterApp: Binding events");
     bindEvents();
+    condensedMode = localStorage.getItem(CONDENSED_KEY) === "true";
+    applyCondensedMode();
     console.log("[DEBUG] enterApp: Rendering home with", Object.keys(decks).length, "decks loaded");
     renderHome();
     hideDebugPanel();
@@ -971,6 +997,13 @@
 
   // ── Event binding ──────────────────────────────────────────────
   function bindEvents() {
+    // Condensed mode toggle
+    $("#condensed-toggle-btn").addEventListener("click", () => {
+      condensedMode = !condensedMode;
+      localStorage.setItem(CONDENSED_KEY, condensedMode);
+      applyCondensedMode();
+    });
+
     // Reveal answer
     $("#reveal-btn").addEventListener("click", revealCard);
 
