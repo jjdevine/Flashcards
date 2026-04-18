@@ -76,6 +76,7 @@
   const STORAGE_KEY = "flashcard_revision";
   const INCORRECT_KEY = "flashcard_incorrect";
   const HIGHLIGHTED_KEY = "flashcard_highlighted";
+  const PINNED_KEY = "flashcard_pinned";
   const DECK_MODE_NORMAL = "normal";
   const DECK_MODE_HIGHLIGHTED = "highlighted";
   let manifest = null;
@@ -83,6 +84,7 @@
   let progress = {};       // "deckId:cardIndex" -> { box, lastSeen }
   let incorrect = {};      // "deckId:cardIndex" -> { front, back, rawLine, deckFile }
   let highlighted = {};    // "deckId:cardIndex" -> true
+  let pinnedDecks = {};    // deckId -> true
   let currentDeckId = null;
   let currentDeckMode = DECK_MODE_NORMAL;
   let currentDeckCardIndices = [];
@@ -123,6 +125,14 @@
       console.error("[ERROR] loadProgress: Failed to parse highlighted", e);
       highlighted = {};
     }
+    try {
+      const raw = localStorage.getItem(PINNED_KEY);
+      pinnedDecks = raw ? JSON.parse(raw) : {};
+      console.log("[DEBUG] loadProgress: Loaded pinned decks:", Object.keys(pinnedDecks).length);
+    } catch (e) {
+      console.error("[ERROR] loadProgress: Failed to parse pinned", e);
+      pinnedDecks = {};
+    }
   }
 
   function saveProgressLocal() {
@@ -135,6 +145,10 @@
 
   function saveHighlightedLocal() {
     try { localStorage.setItem(HIGHLIGHTED_KEY, JSON.stringify(highlighted)); } catch {}
+  }
+
+  function savePinnedLocal() {
+    try { localStorage.setItem(PINNED_KEY, JSON.stringify(pinnedDecks)); } catch {}
   }
 
   function saveProgress() {
@@ -575,13 +589,32 @@
     btn.classList.toggle("active", highlightedNow);
   }
 
+  // ── Pin deck ───────────────────────────────────────────────────
+  function togglePinnedDeck(deckId) {
+    if (pinnedDecks[deckId]) {
+      delete pinnedDecks[deckId];
+    } else {
+      pinnedDecks[deckId] = true;
+    }
+    savePinnedLocal();
+    renderHome();
+  }
+
   // ── Render: Home screen ────────────────────────────────────────
   function renderHome() {
     const grid = $("#deck-grid");
     grid.innerHTML = "";
 
-    for (const entry of manifest.decks) {
+    const sortedDecks = manifest.decks.slice().sort((a, b) => {
+      const aPinned = !!pinnedDecks[a.id];
+      const bPinned = !!pinnedDecks[b.id];
+      if (aPinned === bPinned) return 0;
+      return aPinned ? -1 : 1;
+    });
+
+    for (const entry of sortedDecks) {
       const deck = decks[entry.id];
+      const isPinned = !!pinnedDecks[entry.id];
       const total = deck ? deck.cards.length : 0;
       const seen  = deck ? deck.cards.filter((_, i) => getCardProgress(entry.id, i).box > 0).length : 0;
       const mastered = deck ? deck.cards.filter((_, i) => getCardProgress(entry.id, i).box >= 4).length : 0;
@@ -589,10 +622,11 @@
       const highlightedCount = deck ? deck.cards.filter((_, i) => isCardHighlighted(entry.id, i)).length : 0;
 
       const el = document.createElement("div");
-      el.className = "deck-card";
+      el.className = "deck-card" + (isPinned ? " deck-card-pinned" : "");
       el.innerHTML =
         '<div class="deck-card-top">' +
           '<span class="deck-card-title">' + esc(entry.name) + '</span>' +
+          '<button class="btn-pin' + (isPinned ? ' active" title="Unpin deck"' : '" title="Pin deck to top"') + '>&#x1F4CC;</button>' +
         '</div>' +
         '<div class="deck-card-meta">' +
           '<span>' + total + ' cards</span>' +
@@ -601,6 +635,10 @@
           '<span>' + highlightedCount + ' highlighted</span>' +
         '</div>' +
         '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:' + pct + '%"></div></div>';
+      el.querySelector(".btn-pin").addEventListener("click", (e) => {
+        e.stopPropagation();
+        togglePinnedDeck(entry.id);
+      });
       el.addEventListener("click", () => openDeck(entry.id, DECK_MODE_NORMAL));
       grid.appendChild(el);
 
