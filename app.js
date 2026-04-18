@@ -641,6 +641,7 @@
     currentDeckCardIndices = getDeckCardIndices(currentDeckId, currentDeckMode);
 
     $("#clear-highlighted-btn").classList.toggle("hidden", mode !== DECK_MODE_HIGHLIGHTED);
+    $("#download-highlighted-btn").classList.toggle("hidden", mode !== DECK_MODE_HIGHLIGHTED);
 
     showNextCard();
     updateDeckStats();
@@ -826,6 +827,28 @@
     URL.revokeObjectURL(url);
   }
 
+  function downloadHighlightedLines() {
+    const deck = decks[currentDeckId];
+    if (!deck) return;
+    const highlightedCards = deck.cards.filter((_, i) => isCardHighlighted(currentDeckId, i));
+    if (!highlightedCards.length) return;
+
+    const entry = manifest.decks.find((d) => d.id === currentDeckId);
+    const deckName = (entry ? entry.name : currentDeckId).replace(/[^a-z0-9_\-]/gi, "_");
+
+    const questions = highlightedCards.map((c) => c.front).join("\n");
+    const pairs = highlightedCards.map((c) => c.front + "=" + c.back).join("\n");
+    const output = questions + "\n-------\n" + pairs + "\n";
+
+    const blob = new Blob([output], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = deckName + "-highlighted.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Helpers ────────────────────────────────────────────────────
   function esc(str) {
     const el = document.createElement("span");
@@ -985,6 +1008,9 @@
     $("#clear-highlighted-btn").addEventListener("click", () => {
       clearHighlightedDeck();
     });
+
+    // Download highlighted cards
+    $("#download-highlighted-btn").addEventListener("click", downloadHighlightedLines);
 
     // View incorrect cards
     $("#view-incorrect-btn").addEventListener("click", () => {
