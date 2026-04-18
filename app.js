@@ -639,14 +639,12 @@
           '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:100%"></div></div>' +
           '<button class="btn-deck-clear-sm" aria-label="Clear highlighted" title="Clear highlighted">&#10005;</button>' +
           '<button class="btn-deck-start" aria-label="Start highlighted deck" tabindex="-1">&#9654;</button>';
-        highlightedEl.querySelector(".btn-home-clear-highlighted").addEventListener("click", (e) => {
+        const onClearHighlighted = (e) => {
           e.stopPropagation();
           clearHighlightedDeckById(entry.id);
-        });
-        highlightedEl.querySelector(".btn-deck-clear-sm").addEventListener("click", (e) => {
-          e.stopPropagation();
-          clearHighlightedDeckById(entry.id);
-        });
+        };
+        highlightedEl.querySelector(".btn-home-clear-highlighted").addEventListener("click", onClearHighlighted);
+        highlightedEl.querySelector(".btn-deck-clear-sm").addEventListener("click", onClearHighlighted);
         highlightedEl.addEventListener("click", () => openDeck(entry.id, DECK_MODE_HIGHLIGHTED));
         grid.appendChild(highlightedEl);
       }
