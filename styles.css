@@ -244,6 +244,14 @@ body {
 
 /* === Reset Deck Button === */
 .reset-deck-area { text-align: center; margin-top: 1.5rem; }
+.btn-download-highlighted {
+  background: transparent; border: 1px solid var(--accent); color: var(--accent);
+  padding: 0.5rem 1.2rem; border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 0.85rem; font-weight: 500;
+  transition: all var(--transition);
+  margin-bottom: 0.6rem;
+}
+.btn-download-highlighted:hover { background: var(--accent); color: #fff; }
 .btn-clear-highlighted {
   background: transparent; border: 1px solid var(--orange); color: var(--orange);
   padding: 0.5rem 1.2rem; border-radius: var(--radius-sm); cursor: pointer;
