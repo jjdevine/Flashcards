@@ -256,6 +256,171 @@
     renderHome();
   }
 
+  // ── Resync (overwrite local from DB) ──────────────────────────
+  async function fetchRemoteState() {
+    if (!supabase || !currentUser) return null;
+    try {
+      const { data, error } = await supabase
+        .from("user_state")
+        .select("*")
+        .eq("user_id", currentUser.id)
+        .maybeSingle();
+      if (error) { console.error("Resync fetch error:", error.message); return null; }
+      return data;
+    } catch (e) {
+      console.error("Resync fetch exception:", e);
+      return null;
+    }
+  }
+
+  function getCardName(key) {
+    const colonIdx = key.indexOf(":");
+    if (colonIdx === -1) return key;
+    const deckId = key.slice(0, colonIdx);
+    const cardIndex = parseInt(key.slice(colonIdx + 1), 10);
+    const deck = decks[deckId];
+    if (deck && deck.cards[cardIndex]) return deck.cards[cardIndex].front;
+    return key;
+  }
+
+  function computeResyncDiff(remote) {
+    const remoteProgress  = remote.progress_data  || {};
+    const remoteIncorrect = remote.incorrect_data  || {};
+    const remoteHighlighted = remote.highlighted_data || {};
+
+    const progressChanges = [];
+    const allProgressKeys = new Set([...Object.keys(progress), ...Object.keys(remoteProgress)]);
+    for (const key of allProgressKeys) {
+      const loc = progress[key];
+      const rem = remoteProgress[key];
+      if (!loc && rem) {
+        progressChanges.push({ key, type: "added", local: null, remote: rem });
+      } else if (loc && !rem) {
+        progressChanges.push({ key, type: "removed", local: loc, remote: null });
+      } else if (loc && rem && loc.box !== rem.box) {
+        progressChanges.push({ key, type: "changed", local: loc, remote: rem });
+      }
+    }
+
+    const incorrectChanges = [];
+    const allIncorrectKeys = new Set([...Object.keys(incorrect), ...Object.keys(remoteIncorrect)]);
+    for (const key of allIncorrectKeys) {
+      const loc = incorrect[key];
+      const rem = remoteIncorrect[key];
+      if (!loc && rem) incorrectChanges.push({ key, type: "added",   card: rem });
+      else if (loc && !rem) incorrectChanges.push({ key, type: "removed", card: loc });
+    }
+
+    const highlightedChanges = [];
+    const allHighlightedKeys = new Set([...Object.keys(highlighted), ...Object.keys(remoteHighlighted)]);
+    for (const key of allHighlightedKeys) {
+      const loc = highlighted[key];
+      const rem = remoteHighlighted[key];
+      if (!loc && rem)  highlightedChanges.push({ key, type: "added" });
+      else if (loc && !rem) highlightedChanges.push({ key, type: "removed" });
+    }
+
+    return { progressChanges, incorrectChanges, highlightedChanges };
+  }
+
+  function showResyncDialog(diff) {
+    return new Promise((resolve) => {
+      const modal  = $("#resync-modal");
+      const diffEl = $("#resync-diff");
+
+      let html = "";
+
+      if (diff.progressChanges.length > 0) {
+        html += '<div class="diff-section-title">Progress (' + diff.progressChanges.length + ' card' + (diff.progressChanges.length !== 1 ? "s" : "") + ')</div>';
+        for (const c of diff.progressChanges) {
+          const name = esc(getCardName(c.key));
+          if (c.type === "added") {
+            html += '<div class="diff-row diff-added">+ ' + name + ' — not in local (DB box ' + c.remote.box + ')</div>';
+          } else if (c.type === "removed") {
+            html += '<div class="diff-row diff-removed">− ' + name + ' — local box ' + c.local.box + ', not in DB (will be cleared)</div>';
+          } else {
+            html += '<div class="diff-row diff-changed">~ ' + name + ' — local box ' + c.local.box + ' → DB box ' + c.remote.box + '</div>';
+          }
+        }
+      }
+
+      if (diff.incorrectChanges.length > 0) {
+        html += '<div class="diff-section-title">Incorrect cards (' + diff.incorrectChanges.length + ')</div>';
+        for (const c of diff.incorrectChanges) {
+          const name = esc(c.card.front || c.key);
+          if (c.type === "added") {
+            html += '<div class="diff-row diff-added">+ ' + name + ' — marked incorrect in DB, not locally</div>';
+          } else {
+            html += '<div class="diff-row diff-removed">− ' + name + ' — marked incorrect locally, not in DB (will be unmarked)</div>';
+          }
+        }
+      }
+
+      if (diff.highlightedChanges.length > 0) {
+        html += '<div class="diff-section-title">Highlighted cards (' + diff.highlightedChanges.length + ')</div>';
+        for (const c of diff.highlightedChanges) {
+          const name = esc(getCardName(c.key));
+          if (c.type === "added") {
+            html += '<div class="diff-row diff-added">+ ' + name + ' — highlighted in DB, not locally</div>';
+          } else {
+            html += '<div class="diff-row diff-removed">− ' + name + ' — highlighted locally, not in DB (will be unhighlighted)</div>';
+          }
+        }
+      }
+
+      diffEl.innerHTML = html;
+      modal.classList.remove("hidden");
+
+      function cleanup() {
+        modal.classList.add("hidden");
+        confirmBtn.removeEventListener("click", onConfirm);
+        cancelBtn.removeEventListener("click", onCancel);
+      }
+
+      const confirmBtn = $("#resync-confirm-btn");
+      const cancelBtn  = $("#resync-cancel-btn");
+
+      function onConfirm() { cleanup(); resolve(true); }
+      function onCancel()  { cleanup(); resolve(false); }
+
+      confirmBtn.addEventListener("click", onConfirm);
+      cancelBtn.addEventListener("click", onCancel);
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) { cleanup(); resolve(false); }
+      }, { once: true });
+    });
+  }
+
+  async function handleResync() {
+    const btn = $("#resync-btn");
+    btn.disabled = true;
+    try {
+      const remote = await fetchRemoteState();
+      if (!remote) {
+        alert("No data found in the database.");
+        return;
+      }
+      const diff = computeResyncDiff(remote);
+      const total = diff.progressChanges.length + diff.incorrectChanges.length + diff.highlightedChanges.length;
+      if (total === 0) {
+        alert("Local data already matches the database — nothing to override.");
+        return;
+      }
+      const confirmed = await showResyncDialog(diff);
+      if (confirmed) {
+        progress   = remote.progress_data   || {};
+        incorrect  = remote.incorrect_data  || {};
+        highlighted = remote.highlighted_data || {};
+        saveProgressLocal();
+        saveIncorrectLocal();
+        saveHighlightedLocal();
+        renderHome();
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   // ── CSV Parser ─────────────────────────────────────────────────
   function parseCSVLine(line) {
     const fields = [];
@@ -1087,6 +1252,9 @@
       await syncNow();
       $("#sync-now-btn").disabled = false;
     });
+
+    // Resync from database (overwrite local)
+    $("#resync-btn").addEventListener("click", () => handleResync());
 
     // Logout
     $("#logout-btn").addEventListener("click", async () => {

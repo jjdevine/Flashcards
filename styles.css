@@ -401,3 +401,43 @@ body {
   color: var(--red);
 }
 
+/* === Resync Modal === */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  z-index: 1000; display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.modal-overlay.hidden { display: none; }
+.modal-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.5rem; width: 100%; max-width: 560px;
+  max-height: 85vh; display: flex; flex-direction: column; gap: 1rem;
+}
+.modal-title { font-size: 1.1rem; font-weight: 600; }
+.modal-subtitle { color: var(--text-muted); font-size: 0.875rem; }
+.resync-diff {
+  overflow-y: auto; font-size: 0.825rem; line-height: 1.6;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0.75rem; max-height: 45vh; min-height: 3rem;
+}
+.diff-section-title {
+  font-weight: 600; color: var(--accent);
+  margin: 0.75rem 0 0.25rem; font-size: 0.875rem;
+}
+.diff-section-title:first-child { margin-top: 0; }
+.diff-row { padding: 0.1rem 0; color: var(--text-muted); }
+.diff-row.diff-added { color: var(--green); }
+.diff-row.diff-removed { color: var(--red); }
+.diff-row.diff-changed { color: var(--orange); }
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: 0.75rem; flex-shrink: 0;
+}
+.btn-danger {
+  background: var(--red); color: #fff; border: none;
+  padding: 0.5rem 1.1rem; border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 0.9rem; font-weight: 500;
+  transition: opacity var(--transition);
+}
+.btn-danger:hover { opacity: 0.85; }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+

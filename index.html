@@ -43,6 +43,7 @@
         <div id="user-bar" class="user-bar hidden">
           <span id="user-email" class="user-email"></span>
           <button id="sync-now-btn" class="btn-sync" title="Sync now">&#x21BB;</button>
+          <button id="resync-btn" class="btn-sync" title="Resync from database (overwrite local)">&#x21E9;</button>
           <button id="logout-btn" class="btn-text">Sign out</button>
         </div>
       </header>
@@ -121,6 +122,19 @@
       </div>
     </div>
   </div>
+  <!-- Resync Confirmation Modal -->
+  <div id="resync-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2 class="modal-title">Resync from Database?</h2>
+      <p class="modal-subtitle">The following local data will be overwritten with the database version:</p>
+      <div id="resync-diff" class="resync-diff"></div>
+      <div class="modal-actions">
+        <button id="resync-cancel-btn" class="btn-text">Cancel</button>
+        <button id="resync-confirm-btn" class="btn-danger">Overwrite local data</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="supabase-config.js"></script>
   <script src="app.js"></script>
