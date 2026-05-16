@@ -1,40 +1,40 @@
 {
-  "buildTime": 1776501579343,
-  "decks": [
-    {
-      "id": "ai-design-patterns",
-      "name": "AI Design Patterns",
-      "file": "SourceCsvs/AI Design Patterns.csv"
-    },
-    {
-      "id": "french",
-      "name": "French",
-      "file": "SourceCsvs/French.csv"
-    },
-    {
-      "id": "indo-eng-ind",
-      "name": "Indo Eng-Ind",
-      "file": "SourceCsvs/Indo Eng-Ind.csv"
-    },
-    {
-      "id": "indo-ind-eng",
-      "name": "Indo Ind-Eng",
-      "file": "SourceCsvs/Indo Ind-Eng.csv"
-    },
-    {
-      "id": "indo word phrases",
-      "name": "Indo Word Phrases",
-      "file": "SourceCsvs/Indo Word Phrases.csv"
-    },
-    {
-      "id": "indonesian",
-      "name": "Indonesian",
-      "file": "SourceCsvs/Indonesian.csv"
-    },
-    {
-      "id": "spanish",
-      "name": "Spanish",
-      "file": "SourceCsvs/Spanish.csv"
-    }
-  ]
+    "decks":  [
+                  {
+                      "name":  "AI Design Patterns",
+                      "id":  "ai-design-patterns",
+                      "file":  "SourceCsvs/AI Design Patterns.csv"
+                  },
+                  {
+                      "name":  "French",
+                      "id":  "french",
+                      "file":  "SourceCsvs/French.csv"
+                  },
+                  {
+                      "name":  "Indo Eng-Ind",
+                      "id":  "indo-eng-ind",
+                      "file":  "SourceCsvs/Indo Eng-Ind.csv"
+                  },
+                  {
+                      "name":  "Indo Ind-Eng",
+                      "id":  "indo-ind-eng",
+                      "file":  "SourceCsvs/Indo Ind-Eng.csv"
+                  },
+                  {
+                      "name":  "Indo Word Phrases",
+                      "id":  "indo-word-phrases",
+                      "file":  "SourceCsvs/Indo Word Phrases.csv"
+                  },
+                  {
+                      "name":  "Indonesian",
+                      "id":  "indonesian",
+                      "file":  "SourceCsvs/Indonesian.csv"
+                  },
+                  {
+                      "name":  "Spanish",
+                      "id":  "spanish",
+                      "file":  "SourceCsvs/Spanish.csv"
+                  }
+              ],
+    "buildTime":  1778924431079
 }
