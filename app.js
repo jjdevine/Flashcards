@@ -81,8 +81,8 @@
   let manifest = null;
   let decks = {};          // id -> { cards: [{front, back, tags, rawLine, deckId, cardIndex}] }
   let progress = {};       // "deckId:cardIndex" -> { box, lastSeen }
-  let incorrect = {};      // "deckId:cardIndex" -> { front, back, rawLine, deckFile }
-  let highlighted = {};    // "deckId:cardIndex" -> true
+  let incorrect = {};      // "deckId:cardIndex" -> { value, updatedAt, deletedAt }
+  let highlighted = {};    // "deckId:cardIndex" -> { value, updatedAt, deletedAt }
   let currentDeckId = null;
   let currentDeckMode = DECK_MODE_NORMAL;
   let currentDeckCardIndices = [];
@@ -97,6 +97,130 @@
   const $$ = (sel) => document.querySelectorAll(sel);
 
   // ── Persistence ────────────────────────────────────────────────
+  function nowTs() {
+    return Date.now();
+  }
+
+  function asTimestamp(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function isSyncDeleted(entry) {
+    return !!entry && entry.deletedAt !== null && entry.deletedAt !== undefined;
+  }
+
+  function syncEntryUpdatedAt(entry) {
+    return entry ? asTimestamp(entry.updatedAt) : 0;
+  }
+
+  function syncEntryDeletedAt(entry) {
+    return isSyncDeleted(entry) ? asTimestamp(entry.deletedAt) : 0;
+  }
+
+  function syncEntryChangeTs(entry) {
+    return Math.max(syncEntryUpdatedAt(entry), syncEntryDeletedAt(entry));
+  }
+
+  function pickNewerSyncEntry(localEntry, remoteEntry) {
+    if (!localEntry) return remoteEntry || null;
+    if (!remoteEntry) return localEntry || null;
+
+    const localTs = syncEntryChangeTs(localEntry);
+    const remoteTs = syncEntryChangeTs(remoteEntry);
+    if (remoteTs > localTs) return remoteEntry;
+    if (localTs > remoteTs) return localEntry;
+
+    const localDeleted = isSyncDeleted(localEntry);
+    const remoteDeleted = isSyncDeleted(remoteEntry);
+    if (localDeleted !== remoteDeleted) return localDeleted ? localEntry : remoteEntry;
+
+    return localEntry;
+  }
+
+  function makeActiveSyncEntry(value) {
+    const ts = nowTs();
+    return { value, updatedAt: ts, deletedAt: null };
+  }
+
+  function makeDeletedSyncEntry(prev) {
+    const ts = nowTs();
+    const updatedAt = Math.max(syncEntryUpdatedAt(prev), ts);
+    return { value: null, updatedAt, deletedAt: ts };
+  }
+
+  function normalizeIncorrectEntry(entry) {
+    if (!entry || typeof entry !== "object") return null;
+    if ("value" in entry || "updatedAt" in entry || "deletedAt" in entry) {
+      const deletedAt = entry.deletedAt === null || entry.deletedAt === undefined
+        ? null
+        : asTimestamp(entry.deletedAt);
+      return {
+        value: deletedAt !== null ? null : (entry.value || null),
+        updatedAt: asTimestamp(entry.updatedAt),
+        deletedAt,
+      };
+    }
+    return {
+      value: entry,
+      updatedAt: 0,
+      deletedAt: null,
+    };
+  }
+
+  function normalizeHighlightedEntry(entry) {
+    if (entry === true) {
+      return { value: true, updatedAt: 0, deletedAt: null };
+    }
+    if (entry === false) {
+      return { value: null, updatedAt: 0, deletedAt: 0 };
+    }
+    if (!entry || typeof entry !== "object") return null;
+    if ("value" in entry || "updatedAt" in entry || "deletedAt" in entry) {
+      const deletedAt = entry.deletedAt === null || entry.deletedAt === undefined
+        ? null
+        : asTimestamp(entry.deletedAt);
+      return {
+        value: deletedAt !== null ? null : !!entry.value,
+        updatedAt: asTimestamp(entry.updatedAt),
+        deletedAt,
+      };
+    }
+    return null;
+  }
+
+  function normalizeIncorrectMap(map) {
+    const out = {};
+    if (!map || typeof map !== "object") return out;
+    for (const key of Object.keys(map)) {
+      const normalized = normalizeIncorrectEntry(map[key]);
+      if (normalized) out[key] = normalized;
+    }
+    return out;
+  }
+
+  function normalizeHighlightedMap(map) {
+    const out = {};
+    if (!map || typeof map !== "object") return out;
+    for (const key of Object.keys(map)) {
+      const normalized = normalizeHighlightedEntry(map[key]);
+      if (normalized) out[key] = normalized;
+    }
+    return out;
+  }
+
+  function isIncorrectEntryActive(entry) {
+    return !!entry && !isSyncDeleted(entry) && !!entry.value;
+  }
+
+  function getIncorrectEntryValue(entry) {
+    return isIncorrectEntryActive(entry) ? entry.value : null;
+  }
+
+  function isHighlightedEntryActive(entry) {
+    return !!entry && !isSyncDeleted(entry) && !!entry.value;
+  }
+
   function loadProgress() {
     console.log("[DEBUG] loadProgress: Loading progress from localStorage...");
     try {
@@ -109,7 +233,7 @@
     }
     try {
       const raw = localStorage.getItem(INCORRECT_KEY);
-      incorrect = raw ? JSON.parse(raw) : {};
+      incorrect = normalizeIncorrectMap(raw ? JSON.parse(raw) : {});
       console.log("[DEBUG] loadProgress: Loaded incorrect cards:", Object.keys(incorrect).length);
     } catch (e) {
       console.error("[ERROR] loadProgress: Failed to parse incorrect", e);
@@ -117,7 +241,7 @@
     }
     try {
       const raw = localStorage.getItem(HIGHLIGHTED_KEY);
-      highlighted = raw ? JSON.parse(raw) : {};
+      highlighted = normalizeHighlightedMap(raw ? JSON.parse(raw) : {});
       console.log("[DEBUG] loadProgress: Loaded highlighted cards:", Object.keys(highlighted).length);
     } catch (e) {
       console.error("[ERROR] loadProgress: Failed to parse highlighted", e);
@@ -234,18 +358,22 @@
   }
 
   function mergeIncorrect(remote) {
-    // Union: keep all entries from both sides
-    for (const key of Object.keys(remote)) {
-      if (!incorrect[key]) {
-        incorrect[key] = remote[key];
-      }
+    const normalizedRemote = normalizeIncorrectMap(remote);
+    const keys = new Set([...Object.keys(incorrect), ...Object.keys(normalizedRemote)]);
+    for (const key of keys) {
+      const merged = pickNewerSyncEntry(incorrect[key], normalizedRemote[key]);
+      if (merged) incorrect[key] = merged;
+      else delete incorrect[key];
     }
   }
 
   function mergeHighlighted(remote) {
-    // Union semantics: if highlighted remotely or locally, keep it highlighted.
-    for (const key of Object.keys(remote)) {
-      if (remote[key]) highlighted[key] = true;
+    const normalizedRemote = normalizeHighlightedMap(remote);
+    const keys = new Set([...Object.keys(highlighted), ...Object.keys(normalizedRemote)]);
+    for (const key of keys) {
+      const merged = pickNewerSyncEntry(highlighted[key], normalizedRemote[key]);
+      if (merged) highlighted[key] = merged;
+      else delete highlighted[key];
     }
   }
 
@@ -285,8 +413,8 @@
 
   function computeResyncDiff(remote) {
     const remoteProgress  = remote.progress_data  || {};
-    const remoteIncorrect = remote.incorrect_data  || {};
-    const remoteHighlighted = remote.highlighted_data || {};
+    const remoteIncorrect = normalizeIncorrectMap(remote.incorrect_data || {});
+    const remoteHighlighted = normalizeHighlightedMap(remote.highlighted_data || {});
 
     const progressChanges = [];
     const allProgressKeys = new Set([...Object.keys(progress), ...Object.keys(remoteProgress)]);
@@ -307,8 +435,10 @@
     for (const key of allIncorrectKeys) {
       const loc = incorrect[key];
       const rem = remoteIncorrect[key];
-      if (!loc && rem) incorrectChanges.push({ key, type: "added",   card: rem });
-      else if (loc && !rem) incorrectChanges.push({ key, type: "removed", card: loc });
+      const locCard = getIncorrectEntryValue(loc);
+      const remCard = getIncorrectEntryValue(rem);
+      if (!locCard && remCard) incorrectChanges.push({ key, type: "added", card: remCard });
+      else if (locCard && !remCard) incorrectChanges.push({ key, type: "removed", card: locCard });
     }
 
     const highlightedChanges = [];
@@ -316,8 +446,10 @@
     for (const key of allHighlightedKeys) {
       const loc = highlighted[key];
       const rem = remoteHighlighted[key];
-      if (!loc && rem)  highlightedChanges.push({ key, type: "added" });
-      else if (loc && !rem) highlightedChanges.push({ key, type: "removed" });
+      const locActive = isHighlightedEntryActive(loc);
+      const remActive = isHighlightedEntryActive(rem);
+      if (!locActive && remActive) highlightedChanges.push({ key, type: "added" });
+      else if (locActive && !remActive) highlightedChanges.push({ key, type: "removed" });
     }
 
     return { progressChanges, incorrectChanges, highlightedChanges };
@@ -409,8 +541,8 @@
       const confirmed = await showResyncDialog(diff);
       if (confirmed) {
         progress   = remote.progress_data   || {};
-        incorrect  = remote.incorrect_data  || {};
-        highlighted = remote.highlighted_data || {};
+        incorrect  = normalizeIncorrectMap(remote.incorrect_data || {});
+        highlighted = normalizeHighlightedMap(remote.highlighted_data || {});
         saveProgressLocal();
         saveIncorrectLocal();
         saveHighlightedLocal();
@@ -539,7 +671,11 @@
   }
 
   function isCardHighlighted(deckId, cardIndex) {
-    return !!highlighted[cardKey(deckId, cardIndex)];
+    return isHighlightedEntryActive(highlighted[cardKey(deckId, cardIndex)]);
+  }
+
+  function isCardIncorrect(deckId, cardIndex) {
+    return isIncorrectEntryActive(incorrect[cardKey(deckId, cardIndex)]);
   }
 
   function getDeckCardIndices(deckId, mode) {
@@ -613,7 +749,7 @@
 
     const boxWeights = [4, 50, 5, 3, 2, 1]; // index = box
     const cardWeights = pool.map((i) => {
-      if (incorrect[cardKey(deckId, i)]) return 0; // skip incorrect cards
+      if (isCardIncorrect(deckId, i)) return 0; // skip incorrect cards
       if (sessionEasySet.has(i)) return 0; // skip "very easy" cards this session
       const p = applyDecay(deckId, i);
       return boxWeights[Math.min(p.box, 5)];
@@ -625,7 +761,7 @@
     if (total === 0 && sessionEasySet.size > 0) {
       sessionEasySet.clear();
       pool.forEach((i, poolIdx) => {
-        if (incorrect[cardKey(deckId, i)]) { cardWeights[poolIdx] = 0; return; }
+        if (isCardIncorrect(deckId, i)) { cardWeights[poolIdx] = 0; return; }
         const p = applyDecay(deckId, i);
         cardWeights[poolIdx] = boxWeights[Math.min(p.box, 5)];
       });
@@ -649,13 +785,13 @@
 
     const card = decks[currentDeckId].cards[currentCard];
     const entry = manifest.decks.find((d) => d.id === currentDeckId);
-    incorrect[cardKey(currentDeckId, currentCard)] = {
+    incorrect[cardKey(currentDeckId, currentCard)] = makeActiveSyncEntry({
       front: card.front,
       back: card.back,
       rawLine: card.rawLine,
       deckFile: entry.file,
       deckName: entry.name,
-    };
+    });
     saveIncorrect();
     showNextCard();
   }
@@ -681,14 +817,14 @@
   function toggleCurrentCardHighlight() {
     if (currentDeckId === null || currentCard === null) return;
     const key = cardKey(currentDeckId, currentCard);
-    if (highlighted[key]) {
-      delete highlighted[key];
+    if (isHighlightedEntryActive(highlighted[key])) {
+      highlighted[key] = makeDeletedSyncEntry(highlighted[key]);
     } else {
-      highlighted[key] = true;
+      highlighted[key] = makeActiveSyncEntry(true);
     }
     saveHighlighted();
 
-    if (currentDeckMode === DECK_MODE_HIGHLIGHTED && !highlighted[key]) {
+    if (currentDeckMode === DECK_MODE_HIGHLIGHTED && !isHighlightedEntryActive(highlighted[key])) {
       showNextCard();
       return;
     }
@@ -711,7 +847,8 @@
     if (!deck) return;
 
     deck.cards.forEach((_, i) => {
-      delete highlighted[cardKey(deckId, i)];
+      const key = cardKey(deckId, i);
+      highlighted[key] = makeDeletedSyncEntry(highlighted[key]);
     });
     saveHighlighted();
 
@@ -912,7 +1049,7 @@
 
   // ── Incorrect cards screen ─────────────────────────────────────
   function renderIncorrectScreen() {
-    const keys = Object.keys(incorrect);
+    const keys = Object.keys(incorrect).filter((key) => isIncorrectEntryActive(incorrect[key]));
     const list = $("#incorrect-list");
     const empty = $("#incorrect-empty");
     const actions = $("#incorrect-actions");
@@ -930,7 +1067,8 @@
     // Group by deck
     const byDeck = {};
     for (const key of keys) {
-      const entry = incorrect[key];
+      const entry = getIncorrectEntryValue(incorrect[key]);
+      if (!entry) continue;
       const name = entry.deckName || "Unknown";
       if (!byDeck[name]) byDeck[name] = [];
       byDeck[name].push({ key, ...entry });
@@ -952,7 +1090,7 @@
           '</div>' +
           '<button class="btn-restore" title="Restore card">&#x21A9;</button>';
         el.querySelector(".btn-restore").addEventListener("click", () => {
-          delete incorrect[card.key];
+          incorrect[card.key] = makeDeletedSyncEntry(incorrect[card.key]);
           saveIncorrect();
           renderIncorrectScreen();
         });
@@ -962,13 +1100,14 @@
   }
 
   function downloadIncorrectLines() {
-    const keys = Object.keys(incorrect);
+    const keys = Object.keys(incorrect).filter((key) => isIncorrectEntryActive(incorrect[key]));
     if (!keys.length) return;
 
     // Group raw lines by file
     const byFile = {};
     for (const key of keys) {
-      const entry = incorrect[key];
+      const entry = getIncorrectEntryValue(incorrect[key]);
+      if (!entry) continue;
       const file = entry.deckFile || "unknown.csv";
       if (!byFile[file]) byFile[file] = [];
       byFile[file].push(entry.rawLine);
@@ -1195,7 +1334,9 @@
     // Clear all incorrect marks
     $("#clear-incorrect-btn").addEventListener("click", () => {
       if (confirm("Restore all incorrect cards? They will appear in decks again.")) {
-        incorrect = {};
+        Object.keys(incorrect).forEach((key) => {
+          incorrect[key] = makeDeletedSyncEntry(incorrect[key]);
+        });
         saveIncorrect();
         renderIncorrectScreen();
       }
