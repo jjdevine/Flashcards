@@ -121,6 +121,31 @@ body {
 /* === Card === */
 .card-area { padding: 0.5rem 0 1rem; }
 
+.auto-mode-row {
+  margin-bottom: 0.5rem;
+}
+
+.btn-auto-mode {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all var(--transition);
+}
+.btn-auto-mode:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-auto-mode.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--surface) 60%, var(--accent) 40%);
+}
+
 /* Fixed action row above the card — reveal button and rating buttons share this slot */
 .card-action-row {
   margin-bottom: 0.75rem;
@@ -135,6 +160,34 @@ body {
 }
 .btn-reveal:hover { background: var(--accent-hover); }
 .btn-reveal.hidden { display: none; }
+
+.auto-speed-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+.auto-speed-buttons.hidden { display: none; }
+
+.btn-auto-speed {
+  flex: 1;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all var(--transition);
+}
+.btn-auto-speed:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.btn-auto-speed.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--surface) 55%, var(--accent) 45%);
+  color: #fff;
+}
 
 .card {
   margin-bottom: 1rem;
@@ -440,4 +493,3 @@ body {
 }
 .btn-danger:hover { opacity: 0.85; }
 .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
-

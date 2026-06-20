@@ -70,9 +70,17 @@
 
       <!-- Flashcard -->
       <div class="card-area">
+        <div class="auto-mode-row">
+          <button id="auto-mode-btn" class="btn-auto-mode">Auto Mode</button>
+        </div>
         <!-- Fixed action row: always at the top of the card area -->
         <div class="card-action-row">
           <button id="reveal-btn" class="btn-reveal">Reveal Answer</button>
+          <div id="auto-speed-buttons" class="auto-speed-buttons hidden">
+            <button class="btn-auto-speed" data-speed="3000">3s</button>
+            <button class="btn-auto-speed active" data-speed="5000">5s</button>
+            <button class="btn-auto-speed" data-speed="7000">7s</button>
+          </div>
           <div id="rating-buttons" class="rating-buttons hidden">
             <div class="rating-row">
               <button class="btn-rating hard" data-rating="hard">Hard<span class="rating-key">1</span></button>
