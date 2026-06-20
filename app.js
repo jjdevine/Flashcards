@@ -92,7 +92,7 @@
   let sessionEasySet = new Set(); // card indices rated "very easy" this session
   let canSyncHighlightedData = true;
   let autoModeActive = false;
-  let autoModeSpeedMs = 5000;
+  let autoModeMultiplier = 1.0;
   let autoModeTimer = null;
 
   // ── DOM refs ───────────────────────────────────────────────────
@@ -817,6 +817,31 @@
     showNextCard();
   }
 
+  function getBaseAutoTimeSecs(question) {
+    const words = question.trim().split(/\s+/).filter(Boolean).length;
+    if (words <= 5) return 3;
+    if (words <= 15) return 5;
+    return 7;
+  }
+
+  function getAutoTimeSecs() {
+    if (currentCard === null || !decks[currentDeckId]) return 5;
+    const card = decks[currentDeckId].cards[currentCard];
+    return Math.round(getBaseAutoTimeSecs(card.front) * autoModeMultiplier);
+  }
+
+  function updateCycleTimeDisplay() {
+    const el = $("#auto-cycle-time");
+    if (!el) return;
+    if (autoModeActive && currentCard !== null) {
+      const secs = getAutoTimeSecs();
+      el.textContent = "(" + secs + " second" + (secs === 1 ? "" : "s") + ")";
+      el.classList.remove("hidden");
+    } else {
+      el.classList.add("hidden");
+    }
+  }
+
   function clearAutoModeTimer() {
     if (autoModeTimer !== null) {
       clearTimeout(autoModeTimer);
@@ -839,6 +864,7 @@
     const autoModeBtn = $("#auto-mode-btn");
     autoModeBtn.textContent = autoModeActive ? "Pause Auto Mode" : "Auto Mode";
     autoModeBtn.classList.toggle("active", autoModeActive);
+    updateCycleTimeDisplay();
   }
 
   function queueAutoModeStep() {
@@ -852,7 +878,7 @@
       if (!autoModeActive || currentDeckId === null || currentCard === null) return;
       if (!revealed) revealCard();
       else showNextCard();
-    }, autoModeSpeedMs);
+    }, getAutoTimeSecs() * 1000);
   }
 
   function setAutoMode(active) {
@@ -864,15 +890,16 @@
     if (autoModeActive) queueAutoModeStep();
   }
 
-  function setAutoModeSpeed(speedMs) {
-    const parsed = Number(speedMs);
+  function setAutoModeMultiplier(multiplier) {
+    const parsed = Number(multiplier);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
-    autoModeSpeedMs = parsed;
+    autoModeMultiplier = parsed;
 
     $$(".btn-auto-speed").forEach((btn) => {
-      btn.classList.toggle("active", Number(btn.dataset.speed) === autoModeSpeedMs);
+      btn.classList.toggle("active", Number(btn.dataset.multiplier) === autoModeMultiplier);
     });
 
+    updateCycleTimeDisplay();
     if (autoModeActive) queueAutoModeStep();
   }
 
@@ -1346,7 +1373,7 @@
     $$(".btn-auto-speed").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        setAutoModeSpeed(btn.dataset.speed);
+        setAutoModeMultiplier(btn.dataset.multiplier);
       });
     });
 

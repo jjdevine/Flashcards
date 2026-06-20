@@ -77,9 +77,9 @@
         <div class="card-action-row">
           <button id="reveal-btn" class="btn-reveal">Reveal Answer</button>
           <div id="auto-speed-buttons" class="auto-speed-buttons hidden">
-            <button class="btn-auto-speed" data-speed="3000">3s</button>
-            <button class="btn-auto-speed active" data-speed="5000">5s</button>
-            <button class="btn-auto-speed" data-speed="7000">7s</button>
+            <button class="btn-auto-speed" data-multiplier="1.33">Slow</button>
+            <button class="btn-auto-speed active" data-multiplier="1">Normal</button>
+            <button class="btn-auto-speed" data-multiplier="0.66">Fast</button>
           </div>
           <div id="rating-buttons" class="rating-buttons hidden">
             <div class="rating-row">
@@ -101,6 +101,7 @@
         </div>
       </div>
 
+      <div id="auto-cycle-time" class="auto-cycle-time hidden"></div>
       <div class="deck-stats" id="deck-stats"></div>
       <div id="mark-incorrect-area" class="mark-incorrect-area hidden">
         <button id="toggle-highlight-btn" class="btn-highlight">Highlight card</button>
