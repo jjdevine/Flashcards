@@ -254,6 +254,13 @@ body {
 }
 
 /* === Deck Stats === */
+.auto-cycle-time {
+  text-align: center;
+  font-style: italic;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
 .deck-stats { margin-top: 0.5rem; }
 .stats-grid {
   display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;
