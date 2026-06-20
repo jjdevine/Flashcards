@@ -91,6 +91,9 @@
   let sessionCards = 0;    // cards viewed in the current deck session
   let sessionEasySet = new Set(); // card indices rated "very easy" this session
   let canSyncHighlightedData = true;
+  let autoModeActive = false;
+  let autoModeSpeedMs = 5000;
+  let autoModeTimer = null;
 
   // ── DOM refs ───────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -814,6 +817,65 @@
     showNextCard();
   }
 
+  function clearAutoModeTimer() {
+    if (autoModeTimer !== null) {
+      clearTimeout(autoModeTimer);
+      autoModeTimer = null;
+    }
+  }
+
+  function syncRevisionControls() {
+    const hasCard = currentCard !== null;
+    const showReveal = hasCard && !revealed && !autoModeActive;
+    const showSpeedButtons = hasCard && autoModeActive;
+    const showRatingButtons = hasCard && revealed;
+    const showMarkIncorrect = hasCard && revealed;
+
+    $("#reveal-btn").classList.toggle("hidden", !showReveal);
+    $("#auto-speed-buttons").classList.toggle("hidden", !showSpeedButtons);
+    $("#rating-buttons").classList.toggle("hidden", !showRatingButtons);
+    $("#mark-incorrect-area").classList.toggle("hidden", !showMarkIncorrect);
+
+    const autoModeBtn = $("#auto-mode-btn");
+    autoModeBtn.textContent = autoModeActive ? "Pause Auto Mode" : "Auto Mode";
+    autoModeBtn.classList.toggle("active", autoModeActive);
+  }
+
+  function queueAutoModeStep() {
+    clearAutoModeTimer();
+    if (!autoModeActive) return;
+    if (!$("#deck-screen").classList.contains("active")) return;
+    if (currentDeckId === null || currentCard === null) return;
+
+    autoModeTimer = setTimeout(() => {
+      autoModeTimer = null;
+      if (!autoModeActive || currentDeckId === null || currentCard === null) return;
+      if (!revealed) revealCard();
+      else showNextCard();
+    }, autoModeSpeedMs);
+  }
+
+  function setAutoMode(active) {
+    autoModeActive = !!active;
+    if (!autoModeActive) {
+      clearAutoModeTimer();
+    }
+    syncRevisionControls();
+    if (autoModeActive) queueAutoModeStep();
+  }
+
+  function setAutoModeSpeed(speedMs) {
+    const parsed = Number(speedMs);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    autoModeSpeedMs = parsed;
+
+    $$(".btn-auto-speed").forEach((btn) => {
+      btn.classList.toggle("active", Number(btn.dataset.speed) === autoModeSpeedMs);
+    });
+
+    if (autoModeActive) queueAutoModeStep();
+  }
+
   function toggleCurrentCardHighlight() {
     if (currentDeckId === null || currentCard === null) return;
     const key = cardKey(currentDeckId, currentCard);
@@ -933,6 +995,7 @@
 
   // ── Render: open a deck ────────────────────────────────────────
   async function openDeck(id, mode = DECK_MODE_NORMAL) {
+    setAutoMode(false);
     currentDeckId = id;
     currentDeckMode = mode;
     await loadDeck(id);
@@ -962,9 +1025,8 @@
         : "No cards available right now.";
       $("#card-back-text").textContent = "";
       $("#card-answer-section").classList.add("hidden");
-      $("#reveal-btn").classList.add("hidden");
-      $("#rating-buttons").classList.add("hidden");
-      $("#mark-incorrect-area").classList.add("hidden");
+      syncRevisionControls();
+      clearAutoModeTimer();
       updateProgressBar();
       updateDeckStats();
       return;
@@ -978,10 +1040,9 @@
     $("#card-front-text").textContent = card.front;
     $("#card-back-text").textContent = card.back;
     $("#card-answer-section").classList.add("hidden");
-    $("#reveal-btn").classList.remove("hidden");
-    $("#rating-buttons").classList.add("hidden");
-    $("#mark-incorrect-area").classList.add("hidden");
+    syncRevisionControls();
     updateHighlightToggleButton();
+    if (autoModeActive) queueAutoModeStep();
 
     updateProgressBar();
     updateDeckStats();
@@ -991,9 +1052,8 @@
     if (revealed) return;
     revealed = true;
     $("#card-answer-section").classList.remove("hidden");
-    $("#reveal-btn").classList.add("hidden");
-    $("#rating-buttons").classList.remove("hidden");
-    $("#mark-incorrect-area").classList.remove("hidden");
+    syncRevisionControls();
+    if (autoModeActive) queueAutoModeStep();
     updateHighlightToggleButton();
   }
 
@@ -1041,6 +1101,7 @@
 
   // ── Screen switching ───────────────────────────────────────────
   function showScreen(name) {
+    if (name !== "deck") setAutoMode(false);
     $("#auth-screen").classList.toggle("active", name === "auth");
     $("#home-screen").classList.toggle("active", name === "home");
     $("#deck-screen").classList.toggle("active", name === "deck");
@@ -1278,6 +1339,17 @@
     // Reveal answer
     $("#reveal-btn").addEventListener("click", revealCard);
 
+    // Auto mode
+    $("#auto-mode-btn").addEventListener("click", () => {
+      setAutoMode(!autoModeActive);
+    });
+    $$(".btn-auto-speed").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setAutoModeSpeed(btn.dataset.speed);
+      });
+    });
+
     // Rating buttons
     $$(".btn-rating").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -1288,6 +1360,7 @@
 
     // Back to home
     $("#back-home-btn").addEventListener("click", () => {
+      setAutoMode(false);
       currentDeckId = null;
       currentDeckMode = DECK_MODE_NORMAL;
       currentDeckCardIndices = [];
