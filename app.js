@@ -94,6 +94,8 @@
   let autoModeActive = false;
   let autoModeMultiplier = 1.0;
   let autoModeTimer = null;
+  const AUTO_MODE_WINDOW_SIZE = 15;
+  let recentCardsWindow = []; // card indices of the last AUTO_MODE_WINDOW_SIZE cards shown in auto mode
 
   // ── DOM refs ───────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -772,6 +774,23 @@
     }
 
     if (total === 0) return null; // all cards are incorrect
+
+    // In auto mode, exclude cards in the recent window if other cards are available
+    if (autoModeActive && recentCardsWindow.length > 0) {
+      const windowSet = new Set(recentCardsWindow);
+      const windowedWeights = cardWeights.map((w, idx) => windowSet.has(pool[idx]) ? 0 : w);
+      const windowedTotal = windowedWeights.reduce((a, b) => a + b, 0);
+      if (windowedTotal > 0) {
+        let r = Math.random() * windowedTotal;
+        for (let i = 0; i < windowedWeights.length; i++) {
+          r -= windowedWeights[i];
+          if (r <= 0) return pool[i];
+        }
+        return pool[windowedWeights.reduce((best, w, i) => w > 0 ? i : best, -1)];
+      }
+      // All non-incorrect cards are in the window; fall through to normal selection
+    }
+
     let r = Math.random() * total;
 
     for (let i = 0; i < cardWeights.length; i++) {
@@ -1030,6 +1049,7 @@
     $("#deck-title").textContent = mode === DECK_MODE_HIGHLIGHTED ? entry.name + " (highlighted)" : entry.name;
     sessionCards = 0;
     sessionEasySet = new Set();
+    recentCardsWindow = [];
     currentDeckCardIndices = getDeckCardIndices(currentDeckId, currentDeckMode);
 
     $("#clear-highlighted-btn").classList.toggle("hidden", mode !== DECK_MODE_HIGHLIGHTED);
@@ -1062,6 +1082,14 @@
     currentCard = idx;
     revealed = false;
     sessionCards++;
+
+    // Track this card in the auto mode recent window
+    if (autoModeActive) {
+      recentCardsWindow.push(idx);
+      if (recentCardsWindow.length > AUTO_MODE_WINDOW_SIZE) {
+        recentCardsWindow.shift();
+      }
+    }
 
     const card = decks[currentDeckId].cards[idx];
     $("#card-front-text").textContent = card.front;
