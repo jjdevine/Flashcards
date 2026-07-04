@@ -248,6 +248,17 @@ body {
 .btn-rating.ok:active { background: var(--orange); color: #fff; border-color: var(--orange); }
 .btn-rating.easy:active { background: var(--green); color: #fff; border-color: var(--green); }
 
+/* === I Know This Button (auto mode) === */
+.btn-i-know-this {
+  width: 100%; padding: 0.85rem 1rem;
+  background: var(--green); border: none; color: #fff;
+  border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 1rem; font-weight: 600;
+  transition: background var(--transition);
+}
+.btn-i-know-this:hover { filter: brightness(1.1); }
+.btn-i-know-this.hidden { display: none; }
+
 .rating-key {
   font-size: 0.7rem; color: var(--text-muted); background: var(--bg);
   padding: 0.1rem 0.35rem; border-radius: 3px; margin-left: 0.25rem;
