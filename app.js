@@ -96,6 +96,7 @@
   let autoModeTimer = null;
   const AUTO_MODE_WINDOW_SIZE = 15;
   let recentCardsWindow = []; // card indices of the last AUTO_MODE_WINDOW_SIZE cards shown in auto mode
+  let autoModeKnownSet = new Set(); // card indices marked "I know this" in the current auto mode session
 
   // ── DOM refs ───────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -836,6 +837,13 @@
     showNextCard();
   }
 
+  function markKnownInAutoMode() {
+    if (currentDeckId === null || currentCard === null || !autoModeActive) return;
+    autoModeKnownSet.add(currentCard);
+    clearAutoModeTimer();
+    showNextCard();
+  }
+
   function getBaseAutoTimeSecs(question) {
     const words = question.trim().split(/\s+/).filter(Boolean).length;
     if (words <= 5) return 3;
@@ -872,12 +880,14 @@
     const hasCard = currentCard !== null;
     const showReveal = hasCard && !revealed && !autoModeActive;
     const showSpeedButtons = hasCard && autoModeActive;
-    const showRatingButtons = hasCard && revealed;
+    const showRatingButtons = hasCard && revealed && !autoModeActive;
+    const showIKnowThis = hasCard && revealed && autoModeActive;
     const showMarkIncorrect = hasCard && revealed;
 
     $("#reveal-btn").classList.toggle("hidden", !showReveal);
     $("#auto-speed-buttons").classList.toggle("hidden", !showSpeedButtons);
     $("#rating-buttons").classList.toggle("hidden", !showRatingButtons);
+    $("#i-know-this-btn").classList.toggle("hidden", !showIKnowThis);
     $("#mark-incorrect-area").classList.toggle("hidden", !showMarkIncorrect);
 
     const autoModeBtn = $("#auto-mode-btn");
@@ -904,6 +914,8 @@
     autoModeActive = !!active;
     if (!autoModeActive) {
       clearAutoModeTimer();
+    } else {
+      autoModeKnownSet = new Set();
     }
     syncRevisionControls();
     if (autoModeActive) queueAutoModeStep();
@@ -1050,6 +1062,7 @@
     sessionCards = 0;
     sessionEasySet = new Set();
     recentCardsWindow = [];
+    autoModeKnownSet = new Set();
     currentDeckCardIndices = getDeckCardIndices(currentDeckId, currentDeckMode);
 
     $("#clear-highlighted-btn").classList.toggle("hidden", mode !== DECK_MODE_HIGHLIGHTED);
@@ -1063,6 +1076,50 @@
   // ── Render: show next card ─────────────────────────────────────
   function showNextCard() {
     currentDeckCardIndices = getDeckCardIndices(currentDeckId, currentDeckMode);
+
+    // In auto mode, honour the "I know this" session set
+    if (autoModeActive && autoModeKnownSet.size > 0) {
+      const unknownPool = currentDeckCardIndices.filter(
+        (i) => !autoModeKnownSet.has(i) && !isCardIncorrect(currentDeckId, i)
+      );
+
+      if (unknownPool.length === 0) {
+        // All cards have been marked as known — stop auto mode
+        autoModeActive = false;
+        clearAutoModeTimer();
+        currentCard = null;
+        revealed = false;
+        $("#card-front-text").textContent = "No remaining cards — you've marked everything as known!";
+        $("#card-back-text").textContent = "";
+        $("#card-answer-section").classList.add("hidden");
+        syncRevisionControls();
+        updateProgressBar();
+        updateDeckStats();
+        return;
+      }
+
+      if (unknownPool.length === 1 && unknownPool[0] === currentCard) {
+        // The only unknown card is the current one — show a random bridge card first
+        const bridgePool = currentDeckCardIndices.filter((i) => i !== currentCard);
+        if (bridgePool.length > 0) {
+          const bridgeIdx = bridgePool[Math.floor(Math.random() * bridgePool.length)];
+          displayCard(bridgeIdx);
+          return;
+        }
+        // No bridge possible (only 1 card in deck) — nothing to show
+        return;
+      }
+
+      // Normal auto mode selection but restricted to unknown cards
+      const idx = selectNextCard(currentDeckId, unknownPool);
+      if (idx === null) {
+        // Fall through to standard behaviour (shouldn't normally happen)
+      } else {
+        displayCard(idx);
+        return;
+      }
+    }
+
     const idx = selectNextCard(currentDeckId, currentDeckCardIndices);
     if (idx === null) {
       currentCard = null;
@@ -1079,6 +1136,10 @@
       return;
     }
 
+    displayCard(idx);
+  }
+
+  function displayCard(idx) {
     currentCard = idx;
     revealed = false;
     sessionCards++;
@@ -1411,6 +1472,12 @@
         e.stopPropagation();
         rateCard(btn.dataset.rating);
       });
+    });
+
+    // "I know this" button (auto mode)
+    $("#i-know-this-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      markKnownInAutoMode();
     });
 
     // Back to home
