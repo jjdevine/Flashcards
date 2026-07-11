@@ -50,7 +50,6 @@
       <div id="deck-grid" class="deck-grid"></div>
       <footer class="app-footer">
         <button id="view-incorrect-btn" class="btn-footer">View incorrect cards</button>
-        <button id="generate-llm-prompt-btn" class="btn-footer hidden">Generate LLM prompt</button>
         <button id="reset-progress-btn" class="btn-footer btn-footer-danger">Reset all progress</button>
       </footer>
     </div>
@@ -147,13 +146,13 @@
         <select id="llm-template-select" class="llm-template-select"></select>
       </div>
       <div id="llm-card-review" class="llm-card-review hidden">
-        <div class="llm-card-nav">
+        <div class="llm-card-actions">
           <button id="llm-prev-card-btn" class="btn-footer">Previous card</button>
-          <span id="llm-card-position" class="subtitle"></span>
+          <button id="llm-add-selection-btn" class="btn-primary">Add selected phrase</button>
           <button id="llm-next-card-btn" class="btn-footer">Next card</button>
         </div>
+        <span id="llm-card-position" class="subtitle"></span>
         <div id="llm-card-picker" class="llm-card-picker"></div>
-        <button id="llm-add-selection-btn" class="btn-primary">Add selected phrase</button>
       </div>
       <div id="llm-empty" class="incorrect-empty hidden">No highlighted cards available.</div>
       <div class="llm-selected-terms">

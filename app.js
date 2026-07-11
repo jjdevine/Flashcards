@@ -109,6 +109,7 @@
   let llmPromptCardCursor = 0;
   let llmPromptSelectedTerms = [];
   let llmPromptSelectedTokenIndices = [];
+  let llmPromptSourceDeckName = "";
 
   // ── DOM refs ───────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -1013,10 +1014,11 @@
     return (text || "").match(/\S+/g) || [];
   }
 
-  function getHighlightedCardsForPrompt() {
+  function getHighlightedCardsForPrompt(deckId = null) {
     if (!manifest) return [];
     const cards = [];
     for (const entry of manifest.decks) {
+      if (deckId && entry.id !== deckId) continue;
       const deck = decks[entry.id];
       if (!deck) continue;
       deck.cards.forEach((card, index) => {
@@ -1031,12 +1033,6 @@
       });
     }
     return cards;
-  }
-
-  function syncGeneratePromptButton() {
-    const btn = $("#generate-llm-prompt-btn");
-    if (!btn) return;
-    btn.classList.toggle("hidden", getHighlightedCardsForPrompt().length === 0);
   }
 
   function normalizeTokenSelection(indices) {
@@ -1143,7 +1139,7 @@
     });
 
     position.textContent = "Card " + (llmPromptCardCursor + 1) + " of " + llmPromptCards.length + " • " + card.deckName;
-    summary.textContent = llmPromptCards.length + " highlighted cards";
+    summary.textContent = llmPromptCards.length + " highlighted cards" + (llmPromptSourceDeckName ? " • " + llmPromptSourceDeckName : "");
     $("#llm-prev-card-btn").disabled = llmPromptCardCursor <= 0;
     $("#llm-next-card-btn").disabled = llmPromptCardCursor >= llmPromptCards.length - 1;
     $("#llm-add-selection-btn").disabled = !getCurrentLLMSelectionText();
@@ -1184,8 +1180,10 @@
     renderSelectedLLMTerms();
   }
 
-  function openLLMPromptScreen() {
-    llmPromptCards = getHighlightedCardsForPrompt();
+  function openLLMPromptScreen(deckId = null) {
+    llmPromptCards = getHighlightedCardsForPrompt(deckId);
+    const entry = deckId && manifest ? manifest.decks.find((deck) => deck.id === deckId) : null;
+    llmPromptSourceDeckName = entry ? entry.name : "";
     llmPromptCardCursor = 0;
     llmPromptSelectedTokenIndices = [];
     llmPromptSelectedTerms = [];
@@ -1254,9 +1252,14 @@
             '<span>Only highlighted cards</span>' +
           '</div>' +
           '<div class="deck-card-actions">' +
+            '<button class="btn-home-generate-prompt">Generate LLM prompt</button>' +
             '<button class="btn-home-clear-highlighted">Empty highlighted</button>' +
           '</div>' +
           '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:100%"></div></div>';
+        highlightedEl.querySelector(".btn-home-generate-prompt").addEventListener("click", (e) => {
+          e.stopPropagation();
+          openLLMPromptScreen(entry.id);
+        });
         highlightedEl.querySelector(".btn-home-clear-highlighted").addEventListener("click", (e) => {
           e.stopPropagation();
           clearHighlightedDeckById(entry.id);
@@ -1265,7 +1268,6 @@
         grid.appendChild(highlightedEl);
       }
     }
-    syncGeneratePromptButton();
   }
 
   // ── Render: open a deck ────────────────────────────────────────
@@ -1733,11 +1735,6 @@
     $("#view-incorrect-btn").addEventListener("click", () => {
       renderIncorrectScreen();
       showScreen("incorrect");
-    });
-
-    // Generate LLM prompt from highlighted cards
-    $("#generate-llm-prompt-btn").addEventListener("click", () => {
-      openLLMPromptScreen();
     });
 
     // Back from incorrect screen

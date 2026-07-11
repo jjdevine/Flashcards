@@ -70,7 +70,22 @@ body {
   font-size: 0.8rem; color: var(--text-muted);
   flex-wrap: wrap;
 }
-.deck-card-actions { margin-top: 0.6rem; display: flex; justify-content: flex-end; }
+.deck-card-actions { margin-top: 0.6rem; display: flex; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
+.btn-home-generate-prompt {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.btn-home-generate-prompt:hover {
+  background: var(--accent);
+  color: #fff;
+}
 .btn-home-clear-highlighted {
   background: transparent;
   border: 1px solid var(--orange);
@@ -408,19 +423,22 @@ body {
   padding: 0.55rem 0.7rem;
 }
 .llm-card-review.hidden { display: none; }
-.llm-card-nav {
+.llm-card-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.6rem;
+  flex-wrap: wrap;
 }
-.llm-card-nav .btn-footer {
-  flex: 0 0 auto;
+.llm-card-actions .btn-footer,
+.llm-card-actions .btn-primary {
+  flex: 1 1 0;
   padding: 0.45rem 0.75rem;
 }
 #llm-card-position {
-  flex: 1;
+  display: block;
   text-align: center;
+  margin-bottom: 0.6rem;
 }
 .llm-card-picker {
   background: var(--surface);
@@ -461,10 +479,6 @@ body {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-}
-#llm-add-selection-btn {
-  width: 100%;
-  margin-bottom: 0.7rem;
 }
 .llm-selected-terms h3 {
   font-size: 0.95rem;
