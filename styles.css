@@ -389,6 +389,124 @@ body {
 .btn-footer-danger { color: var(--red); border-color: var(--red); }
 .btn-footer-danger:hover { background: var(--red); color: #fff; border-color: var(--red); }
 
+/* === LLM Prompt Screen === */
+.llm-controls {
+  margin-bottom: 0.75rem;
+}
+.llm-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+.llm-template-select {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+}
+.llm-card-review.hidden { display: none; }
+.llm-card-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.llm-card-nav .btn-footer {
+  flex: 0 0 auto;
+  padding: 0.45rem 0.75rem;
+}
+#llm-card-position {
+  flex: 1;
+  text-align: center;
+}
+.llm-card-picker {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem;
+  margin-bottom: 0.6rem;
+}
+.llm-card-picker-side {
+  margin-bottom: 0.7rem;
+}
+.llm-card-picker-side:last-child {
+  margin-bottom: 0;
+}
+.llm-card-picker-side-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.llm-token-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.btn-llm-token {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 0.28rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.btn-llm-token.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+#llm-add-selection-btn {
+  width: 100%;
+  margin-bottom: 0.7rem;
+}
+.llm-selected-terms h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.45rem;
+}
+#llm-selected-terms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+.llm-selected-term {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.55rem;
+}
+.llm-remove-term {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: pointer;
+}
+.llm-output {
+  width: 100%;
+  min-height: 13rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  font-family: inherit;
+  line-height: 1.45;
+}
+
 /* === Auth Screen === */
 .auth-container {
   max-width: 360px; margin: 0 auto; padding: 1rem 0;

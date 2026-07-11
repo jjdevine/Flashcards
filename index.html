@@ -50,6 +50,7 @@
       <div id="deck-grid" class="deck-grid"></div>
       <footer class="app-footer">
         <button id="view-incorrect-btn" class="btn-footer">View incorrect cards</button>
+        <button id="generate-llm-prompt-btn" class="btn-footer hidden">Generate LLM prompt</button>
         <button id="reset-progress-btn" class="btn-footer btn-footer-danger">Reset all progress</button>
       </footer>
     </div>
@@ -129,6 +130,39 @@
       <div class="incorrect-actions" id="incorrect-actions">
         <button id="download-incorrect-btn" class="btn-primary">Download incorrect lines</button>
         <button id="clear-incorrect-btn" class="btn-text">Clear all incorrect marks</button>
+      </div>
+    </div>
+
+    <!-- Generate LLM Prompt Screen -->
+    <div id="llm-prompt-screen" class="screen">
+      <header class="deck-header">
+        <button id="back-home-btn-llm-prompt" class="btn-back" aria-label="Back to home">&larr;</button>
+        <div class="deck-header-text">
+          <h2>Generate LLM prompt</h2>
+          <p id="llm-prompt-summary" class="subtitle"></p>
+        </div>
+      </header>
+      <div class="llm-controls">
+        <label for="llm-template-select" class="llm-label">Template</label>
+        <select id="llm-template-select" class="llm-template-select"></select>
+      </div>
+      <div id="llm-card-review" class="llm-card-review hidden">
+        <div class="llm-card-nav">
+          <button id="llm-prev-card-btn" class="btn-footer">Previous card</button>
+          <span id="llm-card-position" class="subtitle"></span>
+          <button id="llm-next-card-btn" class="btn-footer">Next card</button>
+        </div>
+        <div id="llm-card-picker" class="llm-card-picker"></div>
+        <button id="llm-add-selection-btn" class="btn-primary">Add selected phrase</button>
+      </div>
+      <div id="llm-empty" class="incorrect-empty hidden">No highlighted cards available.</div>
+      <div class="llm-selected-terms">
+        <h3>Selected words/phrases</h3>
+        <div id="llm-selected-terms-list"></div>
+      </div>
+      <div class="incorrect-actions">
+        <button id="llm-generate-btn" class="btn-primary">Generate prompt</button>
+        <textarea id="llm-output" class="llm-output hidden" readonly></textarea>
       </div>
     </div>
   </div>
