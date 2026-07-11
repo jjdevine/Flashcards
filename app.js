@@ -78,6 +78,14 @@
   const HIGHLIGHTED_KEY = "flashcard_highlighted";
   const DECK_MODE_NORMAL = "normal";
   const DECK_MODE_HIGHLIGHTED = "highlighted";
+  const LLM_TEMPLATES = [
+    {
+      id: "indonesian-anki-csv",
+      name: "Indonesian words → bilingual Anki CSV",
+      prompt:
+        "here is a list of indonesian words i struggle with. give me an anki csv (comma delimited, front and back of card on each line only) with the translations from indonesian to english, and a separate anki csv for the same words english to indonesian:\n\n[words]",
+    },
+  ];
   let manifest = null;
   let decks = {};          // id -> { cards: [{front, back, tags, rawLine, deckId, cardIndex}] }
   let progress = {};       // "deckId:cardIndex" -> { box, lastSeen }
@@ -97,6 +105,10 @@
   const AUTO_MODE_WINDOW_SIZE = 15;
   let recentCardsWindow = []; // card indices of the last AUTO_MODE_WINDOW_SIZE cards shown in auto mode
   let autoModeKnownSet = new Set(); // card indices marked "I know this" in the current auto mode session
+  let llmPromptCards = [];
+  let llmPromptCardCursor = 0;
+  let llmPromptSelectedTerms = [];
+  let llmPromptSelectedTokenIndices = [];
 
   // ── DOM refs ───────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -997,6 +1009,210 @@
     btn.classList.toggle("active", highlightedNow);
   }
 
+  function tokenizeForPrompt(text) {
+    return (text || "").match(/\S+/g) || [];
+  }
+
+  function getHighlightedCardsForPrompt() {
+    if (!manifest) return [];
+    const cards = [];
+    for (const entry of manifest.decks) {
+      const deck = decks[entry.id];
+      if (!deck) continue;
+      deck.cards.forEach((card, index) => {
+        if (!isCardHighlighted(entry.id, index)) return;
+        cards.push({
+          deckId: entry.id,
+          deckName: entry.name,
+          cardIndex: index,
+          front: card.front,
+          back: card.back,
+        });
+      });
+    }
+    return cards;
+  }
+
+  function syncGeneratePromptButton() {
+    const btn = $("#generate-llm-prompt-btn");
+    if (!btn) return;
+    btn.classList.toggle("hidden", getHighlightedCardsForPrompt().length === 0);
+  }
+
+  function normalizeTokenSelection(indices) {
+    if (!indices.length) return [];
+    const sorted = indices.slice().sort((a, b) => a - b);
+    const start = sorted[0];
+    const end = sorted[sorted.length - 1];
+    const contiguous = [];
+    for (let i = start; i <= end; i++) contiguous.push(i);
+    return contiguous;
+  }
+
+  function updateTokenSelection(index) {
+    if (!Number.isInteger(index)) return;
+    const selected = llmPromptSelectedTokenIndices.slice().sort((a, b) => a - b);
+    if (!selected.length) {
+      llmPromptSelectedTokenIndices = [index];
+      return;
+    }
+    const start = selected[0];
+    const end = selected[selected.length - 1];
+    if (selected.includes(index)) {
+      if (selected.length === 1) {
+        llmPromptSelectedTokenIndices = [];
+        return;
+      }
+      if (index === start) {
+        llmPromptSelectedTokenIndices = selected.slice(1);
+        return;
+      }
+      if (index === end) {
+        llmPromptSelectedTokenIndices = selected.slice(0, -1);
+        return;
+      }
+      llmPromptSelectedTokenIndices = [index];
+      return;
+    }
+    if (index === start - 1 || index === end + 1) {
+      llmPromptSelectedTokenIndices = normalizeTokenSelection(selected.concat(index));
+      return;
+    }
+    llmPromptSelectedTokenIndices = [index];
+  }
+
+  function getCurrentLLMSelectionText() {
+    const card = llmPromptCards[llmPromptCardCursor];
+    if (!card || !llmPromptSelectedTokenIndices.length) return "";
+    const tokens = tokenizeForPrompt(card.front).concat(tokenizeForPrompt(card.back));
+    const chosen = llmPromptSelectedTokenIndices
+      .slice()
+      .sort((a, b) => a - b)
+      .map((i) => tokens[i])
+      .filter(Boolean);
+    return chosen.join(" ").trim();
+  }
+
+  function renderLLMCardPicker() {
+    const wrap = $("#llm-card-picker");
+    const review = $("#llm-card-review");
+    const empty = $("#llm-empty");
+    const position = $("#llm-card-position");
+    const summary = $("#llm-prompt-summary");
+    if (!wrap || !review || !empty || !position || !summary) return;
+
+    if (!llmPromptCards.length) {
+      wrap.innerHTML = "";
+      review.classList.add("hidden");
+      empty.classList.remove("hidden");
+      summary.textContent = "No highlighted cards available.";
+      return;
+    }
+
+    empty.classList.add("hidden");
+    review.classList.remove("hidden");
+
+    const card = llmPromptCards[llmPromptCardCursor];
+    const frontTokens = tokenizeForPrompt(card.front);
+    const backTokens = tokenizeForPrompt(card.back);
+    const frontButtons = frontTokens.map((token, index) => {
+      const active = llmPromptSelectedTokenIndices.includes(index);
+      return '<button class="btn-llm-token' + (active ? " active" : "") + '" data-llm-token="' + index + '">' + esc(token) + "</button>";
+    }).join("");
+    const backButtons = backTokens.map((token, index) => {
+      const globalIndex = frontTokens.length + index;
+      const active = llmPromptSelectedTokenIndices.includes(globalIndex);
+      return '<button class="btn-llm-token' + (active ? " active" : "") + '" data-llm-token="' + globalIndex + '">' + esc(token) + "</button>";
+    }).join("");
+
+    wrap.innerHTML =
+      '<div class="llm-card-picker-side">' +
+        '<span class="llm-card-picker-side-label">Front</span>' +
+        '<div class="llm-token-row">' + frontButtons + '</div>' +
+      '</div>' +
+      '<div class="llm-card-picker-side">' +
+        '<span class="llm-card-picker-side-label">Back</span>' +
+        '<div class="llm-token-row">' + backButtons + '</div>' +
+      '</div>';
+
+    wrap.querySelectorAll("[data-llm-token]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        updateTokenSelection(Number(btn.dataset.llmToken));
+        renderLLMCardPicker();
+      });
+    });
+
+    position.textContent = "Card " + (llmPromptCardCursor + 1) + " of " + llmPromptCards.length + " • " + card.deckName;
+    summary.textContent = llmPromptCards.length + " highlighted cards";
+    $("#llm-prev-card-btn").disabled = llmPromptCardCursor <= 0;
+    $("#llm-next-card-btn").disabled = llmPromptCardCursor >= llmPromptCards.length - 1;
+    $("#llm-add-selection-btn").disabled = !getCurrentLLMSelectionText();
+  }
+
+  function renderSelectedLLMTerms() {
+    const list = $("#llm-selected-terms-list");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!llmPromptSelectedTerms.length) {
+      const empty = document.createElement("div");
+      empty.className = "subtitle";
+      empty.textContent = "No words selected yet.";
+      list.appendChild(empty);
+      return;
+    }
+    llmPromptSelectedTerms.forEach((term, index) => {
+      const row = document.createElement("div");
+      row.className = "llm-selected-term";
+      row.innerHTML = "<span>" + esc(term) + "</span><button class=\"llm-remove-term\" data-remove-index=\"" + index + "\" title=\"Remove\">×</button>";
+      row.querySelector(".llm-remove-term").addEventListener("click", () => {
+        llmPromptSelectedTerms.splice(index, 1);
+        renderSelectedLLMTerms();
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function renderLLMPromptScreen() {
+    const select = $("#llm-template-select");
+    if (!select) return;
+    if (!select.options.length) {
+      select.innerHTML = LLM_TEMPLATES.map((template) => {
+        return '<option value="' + esc(template.id) + '">' + esc(template.name) + "</option>";
+      }).join("");
+    }
+    renderLLMCardPicker();
+    renderSelectedLLMTerms();
+  }
+
+  function openLLMPromptScreen() {
+    llmPromptCards = getHighlightedCardsForPrompt();
+    llmPromptCardCursor = 0;
+    llmPromptSelectedTokenIndices = [];
+    llmPromptSelectedTerms = [];
+    $("#llm-output").classList.add("hidden");
+    $("#llm-output").value = "";
+    renderLLMPromptScreen();
+    showScreen("llm-prompt");
+  }
+
+  function addCurrentSelectionToLLMTerms() {
+    const text = getCurrentLLMSelectionText();
+    if (!text) return;
+    llmPromptSelectedTerms.push(text);
+    llmPromptSelectedTokenIndices = [];
+    renderLLMPromptScreen();
+  }
+
+  function generateLLMPrompt() {
+    const select = $("#llm-template-select");
+    const output = $("#llm-output");
+    if (!select || !output) return;
+    const selectedTemplate = LLM_TEMPLATES.find((template) => template.id === select.value) || LLM_TEMPLATES[0];
+    const words = llmPromptSelectedTerms.join("\n");
+    output.value = selectedTemplate.prompt.replace("[words]", words);
+    output.classList.remove("hidden");
+  }
+
   // ── Render: Home screen ────────────────────────────────────────
   function renderHome() {
     const grid = $("#deck-grid");
@@ -1049,6 +1265,7 @@
         grid.appendChild(highlightedEl);
       }
     }
+    syncGeneratePromptButton();
   }
 
   // ── Render: open a deck ────────────────────────────────────────
@@ -1222,6 +1439,7 @@
     $("#home-screen").classList.toggle("active", name === "home");
     $("#deck-screen").classList.toggle("active", name === "deck");
     $("#incorrect-screen").classList.toggle("active", name === "incorrect");
+    $("#llm-prompt-screen").classList.toggle("active", name === "llm-prompt");
   }
 
   // ── Incorrect cards screen ─────────────────────────────────────
@@ -1517,11 +1735,38 @@
       showScreen("incorrect");
     });
 
+    // Generate LLM prompt from highlighted cards
+    $("#generate-llm-prompt-btn").addEventListener("click", () => {
+      openLLMPromptScreen();
+    });
+
     // Back from incorrect screen
     $("#back-home-btn-incorrect").addEventListener("click", () => {
       renderHome();
       showScreen("home");
     });
+
+    // Back from LLM prompt screen
+    $("#back-home-btn-llm-prompt").addEventListener("click", () => {
+      renderHome();
+      showScreen("home");
+    });
+
+    // LLM prompt card navigation
+    $("#llm-prev-card-btn").addEventListener("click", () => {
+      if (llmPromptCardCursor <= 0) return;
+      llmPromptCardCursor--;
+      llmPromptSelectedTokenIndices = [];
+      renderLLMPromptScreen();
+    });
+    $("#llm-next-card-btn").addEventListener("click", () => {
+      if (llmPromptCardCursor >= llmPromptCards.length - 1) return;
+      llmPromptCardCursor++;
+      llmPromptSelectedTokenIndices = [];
+      renderLLMPromptScreen();
+    });
+    $("#llm-add-selection-btn").addEventListener("click", addCurrentSelectionToLLMTerms);
+    $("#llm-generate-btn").addEventListener("click", generateLLMPrompt);
 
     // Download incorrect lines
     $("#download-incorrect-btn").addEventListener("click", downloadIncorrectLines);
