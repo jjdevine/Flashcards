@@ -83,7 +83,7 @@
       id: "indonesian-anki-csv",
       name: "Indonesian words → bilingual Anki CSV",
       prompt:
-        "here is a list of indonesian words i struggle with. give me an anki csv (comma delimited, front and back of card on each line only) with the translations from indonesian to english, and a separate anki csv for the same words english to indonesian:\n\n[words]",
+        "here is a list of indonesian words i struggle with. give me an anki csv (comma delimited, front and back of card on each line only) with the translations from indonesian to english, and a separate anki csv for the same words english to indonesian:\n\n[words]\n\nPrint the CSV text into the chat, don't give me files to download.",
     },
   ];
   let manifest = null;
