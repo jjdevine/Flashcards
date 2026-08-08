@@ -22,6 +22,11 @@
       "file": "SourceCsvs/Indo Ind-Eng.csv"
     },
     {
+      "id": "indo-winda",
+      "name": "Indo Winda",
+      "file": "SourceCsvs/Indo Winda.csv"
+    },
+    {
       "id": "indo-word-phrases",
       "name": "Indo Word Phrases",
       "file": "SourceCsvs/Indo Word Phrases.csv"
