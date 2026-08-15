@@ -65,17 +65,20 @@
   };
 
   // ── Supabase client ────────────────────────────────────────────
-  const supabase = (typeof SUPABASE_URL !== "undefined" && SUPABASE_URL !== "https://YOUR_PROJECT_REF.supabase.co")
+  const supabase = (typeof window !== "undefined"
+      && window.supabase
+      && typeof SUPABASE_URL !== "undefined"
+      && SUPABASE_URL !== "https://YOUR_PROJECT_REF.supabase.co")
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
   let currentUser = null;   // Supabase user object when signed in
   let syncInFlight = false; // Guard against overlapping syncs
   let appEntered = false;   // Guard against duplicate enterApp() calls
+  let readOnlyMode = false;
+  let readOnlyMessage = "";
+  let serverReachable = !!supabase;
 
   // ── State ──────────────────────────────────────────────────────
-  const STORAGE_KEY = "flashcard_revision";
-  const INCORRECT_KEY = "flashcard_incorrect";
-  const HIGHLIGHTED_KEY = "flashcard_highlighted";
   const DECK_MODE_NORMAL = "normal";
   const DECK_MODE_HIGHLIGHTED = "highlighted";
   const LLM_TEMPLATES = [
@@ -118,6 +121,119 @@
   // ── Persistence ────────────────────────────────────────────────
   function nowTs() {
     return Date.now();
+  }
+
+  function isNetworkOnline() {
+    return typeof navigator === "undefined" ? true : navigator.onLine !== false;
+  }
+
+  function canPersistState() {
+    return !!supabase && !!currentUser && !readOnlyMode;
+  }
+
+  function resetStateData() {
+    progress = {};
+    incorrect = {};
+    highlighted = {};
+  }
+
+  function updateModeBanner() {
+    const banner = $("#mode-banner");
+    if (!banner) return;
+    const show = appEntered && readOnlyMode && !!readOnlyMessage;
+    banner.textContent = readOnlyMessage;
+    banner.classList.toggle("hidden", !show);
+  }
+
+  function showUserBar() {
+    const bar = $("#user-bar");
+    if (!bar) return;
+    if (!currentUser) {
+      bar.classList.add("hidden");
+      return;
+    }
+    $("#user-email").textContent = currentUser.email;
+    $("#sync-now-btn").classList.toggle("hidden", !canPersistState());
+    $("#resync-btn").classList.toggle("hidden", !canPersistState());
+    bar.classList.remove("hidden");
+  }
+
+  function refreshCurrentDeckState() {
+    if (currentDeckId === null) return;
+    currentDeckCardIndices = getDeckCardIndices(currentDeckId, currentDeckMode);
+    updateProgressBar();
+    updateDeckStats();
+    updateHighlightToggleButton();
+  }
+
+  function updateReadOnlyUI() {
+    updateModeBanner();
+    showUserBar();
+    if (!appEntered) return;
+
+    const resetProgressBtn = $("#reset-progress-btn");
+    if (resetProgressBtn) resetProgressBtn.classList.toggle("hidden", readOnlyMode);
+
+    const clearIncorrectBtn = $("#clear-incorrect-btn");
+    if (clearIncorrectBtn) clearIncorrectBtn.classList.toggle("hidden", readOnlyMode);
+
+    const resetDeckBtn = $("#reset-deck-btn");
+    if (resetDeckBtn) resetDeckBtn.classList.toggle("hidden", readOnlyMode);
+
+    const clearHighlightedBtn = $("#clear-highlighted-btn");
+    if (clearHighlightedBtn) {
+      clearHighlightedBtn.classList.toggle("hidden", currentDeckMode !== DECK_MODE_HIGHLIGHTED || readOnlyMode);
+    }
+
+    if (manifest) renderHome();
+    if ($("#incorrect-screen")?.classList.contains("active")) renderIncorrectScreen();
+    syncRevisionControls();
+    updateHighlightToggleButton();
+  }
+
+  function setReadOnlyMode(enabled, message) {
+    readOnlyMode = !!enabled;
+    readOnlyMessage = readOnlyMode ? (message || "Read-only mode — progress cannot be saved right now.") : "";
+    if (readOnlyMode) clearTimeout(syncTimer);
+    updateReadOnlyUI();
+  }
+
+  function updateReadOnlyMode(message) {
+    if (!supabase) {
+      setReadOnlyMode(true, "Read-only mode — server sync is unavailable.");
+      return;
+    }
+    if (!currentUser) {
+      setReadOnlyMode(true, isNetworkOnline()
+        ? "Read-only mode — sign in to save progress on the server."
+        : "Offline read-only mode — practice without saving progress.");
+      return;
+    }
+    if (!isNetworkOnline()) {
+      setReadOnlyMode(true, "Offline read-only mode — practice without saving progress.");
+      return;
+    }
+    if (!serverReachable) {
+      setReadOnlyMode(true, message || "Read-only mode — the server is unavailable, so progress will not be saved.");
+      return;
+    }
+    setReadOnlyMode(false, "");
+  }
+
+  function noteServerReachable() {
+    serverReachable = true;
+    updateReadOnlyMode();
+  }
+
+  function noteServerUnreachable(message) {
+    serverReachable = false;
+    updateReadOnlyMode(message);
+  }
+
+  function requireWritableState() {
+    if (canPersistState()) return true;
+    alert(readOnlyMessage || "Read-only mode — this change cannot be saved.");
+    return false;
   }
 
   function asTimestamp(value) {
@@ -241,44 +357,15 @@
   }
 
   function loadProgress() {
-    console.log("[DEBUG] loadProgress: Loading progress from localStorage...");
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      progress = raw ? JSON.parse(raw) : {};
-      console.log("[DEBUG] loadProgress: Loaded progress with", Object.keys(progress).length, "cards");
-    } catch (e) {
-      console.error("[ERROR] loadProgress: Failed to parse progress", e);
-      progress = {};
-    }
-    try {
-      const raw = localStorage.getItem(INCORRECT_KEY);
-      incorrect = normalizeIncorrectMap(raw ? JSON.parse(raw) : {});
-      console.log("[DEBUG] loadProgress: Loaded incorrect cards:", Object.keys(incorrect).length);
-    } catch (e) {
-      console.error("[ERROR] loadProgress: Failed to parse incorrect", e);
-      incorrect = {};
-    }
-    try {
-      const raw = localStorage.getItem(HIGHLIGHTED_KEY);
-      highlighted = normalizeHighlightedMap(raw ? JSON.parse(raw) : {});
-      console.log("[DEBUG] loadProgress: Loaded highlighted cards:", Object.keys(highlighted).length);
-    } catch (e) {
-      console.error("[ERROR] loadProgress: Failed to parse highlighted", e);
-      highlighted = {};
-    }
+    console.log("[DEBUG] loadProgress: Starting with empty in-memory state");
+    resetStateData();
   }
 
-  function saveProgressLocal() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(progress)); } catch {}
-  }
+  function saveProgressLocal() {}
 
-  function saveIncorrectLocal() {
-    try { localStorage.setItem(INCORRECT_KEY, JSON.stringify(incorrect)); } catch {}
-  }
+  function saveIncorrectLocal() {}
 
-  function saveHighlightedLocal() {
-    try { localStorage.setItem(HIGHLIGHTED_KEY, JSON.stringify(highlighted)); } catch {}
-  }
+  function saveHighlightedLocal() {}
 
   function saveProgress() {
     saveProgressLocal();
@@ -298,13 +385,16 @@
   // ── Supabase sync ─────────────────────────────────────────────
   let syncTimer = null;
   function debouncedSync() {
-    if (!currentUser) return;
+    if (!canPersistState()) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(() => pushState(), 1500);
   }
 
   async function pushState() {
-    if (!supabase || !currentUser || syncInFlight) return;
+    if (!supabase || !currentUser || syncInFlight || !isNetworkOnline()) {
+      updateReadOnlyMode();
+      return false;
+    }
     syncInFlight = true;
     try {
       const row = {
@@ -330,16 +420,27 @@
         }));
       }
 
-      if (error) console.error("Sync push error:", error.message);
+      if (error) {
+        console.error("Sync push error:", error.message);
+        noteServerUnreachable("Read-only mode — the server rejected progress updates.");
+        return false;
+      }
+      noteServerReachable();
+      return true;
     } catch (e) {
       console.error("Sync push exception:", e);
+      noteServerUnreachable("Offline read-only mode — practice without saving progress.");
+      return false;
     } finally {
       syncInFlight = false;
     }
   }
 
   async function pullState() {
-    if (!supabase || !currentUser) return;
+    if (!supabase || !currentUser || !isNetworkOnline()) {
+      updateReadOnlyMode();
+      return false;
+    }
     try {
       const { data, error } = await supabase
         .from("user_state")
@@ -347,19 +448,24 @@
         .eq("user_id", currentUser.id)
         .maybeSingle();
 
-      if (error) { console.error("Sync pull error:", error.message); return; }
-      if (!data) return; // No remote state yet
+      if (error) {
+        console.error("Sync pull error:", error.message);
+        noteServerUnreachable("Read-only mode — the server could not be reached.");
+        return false;
+      }
+      noteServerReachable();
+      if (!data) return true; // No remote state yet
 
       mergeProgress(data.progress_data || {});
       mergeIncorrect(data.incorrect_data || {});
       if (data.highlighted_data) {
         mergeHighlighted(data.highlighted_data || {});
       }
-      saveProgressLocal();
-      saveIncorrectLocal();
-      saveHighlightedLocal();
+      return true;
     } catch (e) {
       console.error("Sync pull exception:", e);
+      noteServerUnreachable("Offline read-only mode — practice without saving progress.");
+      return false;
     }
   }
 
@@ -397,25 +503,34 @@
   }
 
   async function syncNow() {
-    if (!currentUser) return;
-    await pullState();
-    await pushState();
+    if (!currentUser || readOnlyMode) return;
+    const pulled = await pullState();
+    if (pulled) await pushState();
     renderHome();
   }
 
   // ── Resync (overwrite local from DB) ──────────────────────────
   async function fetchRemoteState() {
-    if (!supabase || !currentUser) return null;
+    if (!supabase || !currentUser || !isNetworkOnline()) {
+      updateReadOnlyMode();
+      return null;
+    }
     try {
       const { data, error } = await supabase
         .from("user_state")
         .select("*")
         .eq("user_id", currentUser.id)
         .maybeSingle();
-      if (error) { console.error("Resync fetch error:", error.message); return null; }
+      if (error) {
+        console.error("Resync fetch error:", error.message);
+        noteServerUnreachable("Read-only mode — the server could not be reached.");
+        return null;
+      }
+      noteServerReachable();
       return data;
     } catch (e) {
       console.error("Resync fetch exception:", e);
+      noteServerUnreachable("Offline read-only mode — practice without saving progress.");
       return null;
     }
   }
@@ -543,6 +658,7 @@
   }
 
   async function handleResync() {
+    if (!requireWritableState()) return;
     const btn = $("#resync-btn");
     btn.disabled = true;
     try {
@@ -713,6 +829,7 @@
   }
 
   function setCardProgress(deckId, cardIndex, data) {
+    if (!canPersistState()) return;
     progress[cardKey(deckId, cardIndex)] = data;
     saveProgress();
   }
@@ -742,7 +859,7 @@
     const newBox = Math.max(1, p.box - intervals);
     if (newBox !== p.box) {
       const updated = { box: newBox, lastSeen: p.lastSeen };
-      setCardProgress(deckId, cardIndex, updated);
+      if (canPersistState()) setCardProgress(deckId, cardIndex, updated);
       return updated;
     }
     return p;
@@ -817,6 +934,7 @@
   // ── Mark incorrect ─────────────────────────────────────────────
   function markIncorrect() {
     if (currentDeckId === null || currentCard === null) return;
+    if (!requireWritableState()) return;
     if (!confirm("Mark this card as incorrect? It will be hidden from this deck.")) return;
 
     const card = decks[currentDeckId].cards[currentCard];
@@ -835,6 +953,7 @@
   // ── Rating ─────────────────────────────────────────────────────
   function rateCard(rating) {
     if (currentDeckId === null || currentCard === null) return;
+    if (!requireWritableState()) return;
 
     const p = getCardProgress(currentDeckId, currentCard);
     let newBox = p.box || 1;
@@ -893,13 +1012,15 @@
     const hasCard = currentCard !== null;
     const showReveal = hasCard && !revealed && !autoModeActive;
     const showSpeedButtons = hasCard && autoModeActive;
-    const showRatingButtons = hasCard && revealed && !autoModeActive;
+    const showRatingButtons = hasCard && revealed && !autoModeActive && !readOnlyMode;
+    const showReadOnlyNext = hasCard && revealed && !autoModeActive && readOnlyMode;
     const showIKnowThis = hasCard && revealed && autoModeActive;
-    const showMarkIncorrect = hasCard && revealed;
+    const showMarkIncorrect = hasCard && revealed && !readOnlyMode;
 
     $("#reveal-btn").classList.toggle("hidden", !showReveal);
     $("#auto-speed-buttons").classList.toggle("hidden", !showSpeedButtons);
     $("#rating-buttons").classList.toggle("hidden", !showRatingButtons);
+    $("#next-card-btn").classList.toggle("hidden", !showReadOnlyNext);
     $("#i-know-this-btn").classList.toggle("hidden", !showIKnowThis);
     $("#mark-incorrect-area").classList.toggle("hidden", !showMarkIncorrect);
 
@@ -949,6 +1070,7 @@
 
   function toggleCurrentCardHighlight() {
     if (currentDeckId === null || currentCard === null) return;
+    if (!requireWritableState()) return;
     const key = cardKey(currentDeckId, currentCard);
     if (isHighlightedEntryActive(highlighted[key])) {
       highlighted[key] = makeDeletedSyncEntry(highlighted[key]);
@@ -972,6 +1094,7 @@
 
   function clearHighlightedDeckById(deckId) {
     if (!deckId) return;
+    if (!requireWritableState()) return;
     const entry = manifest.decks.find((d) => d.id === deckId);
     if (!entry) return;
     if (!confirm("Empty highlighted deck for " + entry.name + "?")) return;
@@ -1004,7 +1127,9 @@
 
   function updateHighlightToggleButton() {
     const btn = $("#toggle-highlight-btn");
-    if (!btn || currentDeckId === null || currentCard === null) return;
+    if (!btn) return;
+    btn.classList.toggle("hidden", readOnlyMode);
+    if (currentDeckId === null || currentCard === null) return;
     const highlightedNow = isCardHighlighted(currentDeckId, currentCard);
     btn.textContent = highlightedNow ? "Unhighlight card" : "Highlight card";
     btn.classList.toggle("active", highlightedNow);
@@ -1243,6 +1368,12 @@
       if (highlightedCount > 0) {
         const highlightedEl = document.createElement("div");
         highlightedEl.className = "deck-card deck-card-highlighted";
+        const actionButtons = [
+          '<button class="btn-home-generate-prompt">Generate LLM prompt</button>'
+        ];
+        if (!readOnlyMode) {
+          actionButtons.push('<button class="btn-home-clear-highlighted">Empty highlighted</button>');
+        }
         highlightedEl.innerHTML =
           '<div class="deck-card-top">' +
             '<span class="deck-card-title">' + esc(entry.name + " (highlighted)") + '</span>' +
@@ -1252,18 +1383,20 @@
             '<span>Only highlighted cards</span>' +
           '</div>' +
           '<div class="deck-card-actions">' +
-            '<button class="btn-home-generate-prompt">Generate LLM prompt</button>' +
-            '<button class="btn-home-clear-highlighted">Empty highlighted</button>' +
+            actionButtons.join("") +
           '</div>' +
           '<div class="deck-progress-bar"><div class="deck-progress-fill" style="width:100%"></div></div>';
         highlightedEl.querySelector(".btn-home-generate-prompt").addEventListener("click", (e) => {
           e.stopPropagation();
           openLLMPromptScreen(entry.id);
         });
-        highlightedEl.querySelector(".btn-home-clear-highlighted").addEventListener("click", (e) => {
-          e.stopPropagation();
-          clearHighlightedDeckById(entry.id);
-        });
+        const clearBtn = highlightedEl.querySelector(".btn-home-clear-highlighted");
+        if (clearBtn) {
+          clearBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            clearHighlightedDeckById(entry.id);
+          });
+        }
         highlightedEl.addEventListener("click", () => openDeck(entry.id, DECK_MODE_HIGHLIGHTED));
         grid.appendChild(highlightedEl);
       }
@@ -1284,7 +1417,7 @@
     autoModeKnownSet = new Set();
     currentDeckCardIndices = getDeckCardIndices(currentDeckId, currentDeckMode);
 
-    $("#clear-highlighted-btn").classList.toggle("hidden", mode !== DECK_MODE_HIGHLIGHTED);
+    $("#clear-highlighted-btn").classList.toggle("hidden", mode !== DECK_MODE_HIGHLIGHTED || readOnlyMode);
     $("#download-highlighted-btn").classList.toggle("hidden", mode !== DECK_MODE_HIGHLIGHTED);
 
     showNextCard();
@@ -1460,6 +1593,7 @@
 
     empty.classList.add("hidden");
     actions.classList.remove("hidden");
+    $("#clear-incorrect-btn").classList.toggle("hidden", readOnlyMode);
 
     // Group by deck
     const byDeck = {};
@@ -1485,12 +1619,16 @@
             '<div class="incorrect-front">' + esc(card.front) + '</div>' +
             '<div class="incorrect-back">' + esc(card.back) + '</div>' +
           '</div>' +
-          '<button class="btn-restore" title="Restore card">&#x21A9;</button>';
-        el.querySelector(".btn-restore").addEventListener("click", () => {
-          incorrect[card.key] = makeDeletedSyncEntry(incorrect[card.key]);
-          saveIncorrect();
-          renderIncorrectScreen();
-        });
+          (readOnlyMode ? '' : '<button class="btn-restore" title="Restore card">&#x21A9;</button>');
+        const restoreBtn = el.querySelector(".btn-restore");
+        if (restoreBtn) {
+          restoreBtn.addEventListener("click", () => {
+            if (!requireWritableState()) return;
+            incorrect[card.key] = makeDeletedSyncEntry(incorrect[card.key]);
+            saveIncorrect();
+            renderIncorrectScreen();
+          });
+        }
         list.appendChild(el);
       }
     }
@@ -1616,14 +1754,6 @@
     });
   }
 
-  function showUserBar() {
-    if (!currentUser) {
-      $("#user-bar").classList.add("hidden");
-      return;
-    }
-    $("#user-email").textContent = currentUser.email;
-    $("#user-bar").classList.remove("hidden");
-  }
 
   async function enterApp() {
     console.log("[DEBUG] enterApp: Starting app initialization...");
@@ -1637,16 +1767,17 @@
     showScreen("home");
     console.log("[DEBUG] enterApp: Loading local progress");
     loadProgress();
+    updateReadOnlyMode();
+
+    if (currentUser) {
+      console.log("[DEBUG] enterApp: User logged in, pulling remote state...");
+      await pullState();
+      console.log("[DEBUG] enterApp: Remote state sync attempted");
+    } else {
+      console.log("[DEBUG] enterApp: Running in read-only mode (no user)");
+    }
 
     try {
-      if (currentUser) {
-        console.log("[DEBUG] enterApp: User logged in, pulling remote state...");
-        await pullState();
-        console.log("[DEBUG] enterApp: Remote state synced");
-      } else {
-        console.log("[DEBUG] enterApp: Running in offline mode (no user)");
-      }
-
       console.log("[DEBUG] enterApp: Loading manifest...");
       await loadManifest();
       console.log("[DEBUG] enterApp: Loading all decks in parallel...");
@@ -1657,6 +1788,7 @@
     } catch (e) {
       console.error("[ERROR] enterApp: Failed to load app data:", e);
       appEntered = false;
+      updateModeBanner();
       return;
     }
 
@@ -1666,8 +1798,19 @@
     bindEvents();
     console.log("[DEBUG] enterApp: Rendering home with", Object.keys(decks).length, "decks loaded");
     renderHome();
+    updateReadOnlyUI();
     hideDebugPanel();
     console.log("[DEBUG] enterApp: App fully initialized");
+  }
+
+  async function handleOnlineStateChange() {
+    updateReadOnlyMode();
+    if (!currentUser || !supabase || !isNetworkOnline()) return;
+    const synced = await pullState();
+    if (!synced) return;
+    renderHome();
+    refreshCurrentDeckState();
+    if ($("#incorrect-screen")?.classList.contains("active")) renderIncorrectScreen();
   }
 
   // ── Event binding ──────────────────────────────────────────────
@@ -1764,12 +1907,14 @@
     });
     $("#llm-add-selection-btn").addEventListener("click", addCurrentSelectionToLLMTerms);
     $("#llm-generate-btn").addEventListener("click", generateLLMPrompt);
+    $("#next-card-btn").addEventListener("click", showNextCard);
 
     // Download incorrect lines
     $("#download-incorrect-btn").addEventListener("click", downloadIncorrectLines);
 
     // Clear all incorrect marks
     $("#clear-incorrect-btn").addEventListener("click", () => {
+      if (!requireWritableState()) return;
       if (confirm("Restore all incorrect cards? They will appear in decks again.")) {
         Object.keys(incorrect).forEach((key) => {
           incorrect[key] = makeDeletedSyncEntry(incorrect[key]);
@@ -1781,6 +1926,7 @@
 
     // Reset progress
     $("#reset-progress-btn").addEventListener("click", () => {
+      if (!requireWritableState()) return;
       if (confirm("Reset all progress? This cannot be undone.")) {
         progress = {};
         saveProgress();
@@ -1792,6 +1938,7 @@
     // Reset current deck
     $("#reset-deck-btn").addEventListener("click", () => {
       if (!currentDeckId) return;
+      if (!requireWritableState()) return;
       const entry = manifest.decks.find((d) => d.id === currentDeckId);
       if (!confirm("Reset all progress for " + entry.name + "? This cannot be undone.")) return;
       const deck = decks[currentDeckId];
@@ -1816,6 +1963,8 @@
         e.preventDefault();
         if (!revealed) {
           revealCard();
+        } else if (readOnlyMode && !autoModeActive) {
+          showNextCard();
         }
       } else if (revealed) {
         if (e.key === "1") rateCard("hard");
@@ -1838,7 +1987,9 @@
     $("#logout-btn").addEventListener("click", async () => {
       if (supabase) await supabase.auth.signOut();
       currentUser = null;
+      serverReachable = !!supabase;
       appEntered = false;
+      updateReadOnlyMode();
       showUserBar();
       showScreen("auth");
     });
@@ -1846,14 +1997,25 @@
 
   // ── Init ───────────────────────────────────────────────────────
   async function init() {
+    window.addEventListener("online", handleOnlineStateChange);
+    window.addEventListener("offline", () => updateReadOnlyMode());
+
     // If Supabase is configured, set up auth listener and show auth screen
     if (supabase) {
       bindAuthEvents();
 
       // Check for existing session first (handles page refresh)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        currentUser = session.user;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          currentUser = session.user;
+          await enterApp();
+        } else if (!isNetworkOnline()) {
+          await enterApp();
+        }
+      } catch (e) {
+        console.error("[ERROR] init: Failed to restore auth session:", e);
+        noteServerUnreachable("Offline read-only mode — practice without saving progress.");
         await enterApp();
       }
 
@@ -1861,16 +2023,20 @@
       supabase.auth.onAuthStateChange((event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
           currentUser = session.user;
+          serverReachable = true;
           enterApp();
         } else if (event === "SIGNED_OUT") {
           currentUser = null;
+          serverReachable = !!supabase;
           appEntered = false;
+          updateReadOnlyMode();
           showScreen("auth");
         }
       });
       // If no session, auth screen is already showing
     } else {
       // No Supabase configured — run in local-only mode
+      updateReadOnlyMode();
       await enterApp();
     }
   }

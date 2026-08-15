@@ -14,11 +14,13 @@
       <div id="debug-logs" class="debug-logs"></div>
     </div>
 
+    <div id="mode-banner" class="mode-banner hidden"></div>
+
     <!-- Auth Screen -->
     <div id="auth-screen" class="screen active">
       <header class="app-header">
         <h1>Flashcard Revision</h1>
-        <p class="subtitle">Sign in to sync progress across devices</p>
+        <p class="subtitle">Sign in to save progress on the server across devices</p>
       </header>
       <div class="auth-container">
         <div class="auth-tabs">
@@ -31,7 +33,7 @@
           <button type="submit" id="auth-submit-btn" class="btn-primary auth-submit">Sign In</button>
           <p id="auth-error" class="auth-error hidden"></p>
         </form>
-        <button id="skip-auth-btn" class="btn-text auth-skip">Continue without signing in</button>
+        <button id="skip-auth-btn" class="btn-text auth-skip">Continue in read-only mode</button>
       </div>
     </div>
 
@@ -88,6 +90,7 @@
               <button class="btn-rating easy" data-rating="easy">Very Easy<span class="rating-key">3</span></button>
             </div>
           </div>
+          <button id="next-card-btn" class="btn-next-card hidden">Next Card</button>
           <button id="i-know-this-btn" class="btn-i-know-this hidden">I know this</button>
         </div>
 
